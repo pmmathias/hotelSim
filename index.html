@@ -11,7 +11,8 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; width: 100%; height: 100%; }
-    canvas { display: block; width: 100% !important; height: 100% !important; }
+    canvas { display: block; }
+    canvas:not(#minimap) { width: 100% !important; height: 100% !important; }
     /* iOS safe area support */
     body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
 
