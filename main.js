@@ -2121,89 +2121,12 @@ function buildScene(scene) {
       gateX, 3.0, zMin - 0.45));
   }
 
-  // ONE outer perimeter around BOTH hotels + internal dividing hedge with artist door
-  const outerXMin = -140, outerXMax = 175, outerZMin = -82, outerZMax = 155;
-  const outerW = outerXMax - outerXMin;
-  const outerD = outerZMax - outerZMin;
-  const outerCX = (outerXMin + outerXMax) / 2;
-  const outerCZ = (outerZMin + outerZMax) / 2;
-
-  // Outer walls
-  addFenceSegment(outerW, fenceT, outerCX, 0, outerZMax); // south
-  addFenceSegment(fenceT, outerD, outerXMax, 0, outerCZ); // east
-  addFenceSegment(fenceT, outerD, outerXMin, 0, outerCZ); // west
-
-  // North wall with 2 gates
-  const northSegs = [
-    { from: outerXMin, to: dfwX - gateW / 2 },
-    { from: dfwX + gateW / 2, to: dwwX - gateW / 2 },
-    { from: dwwX + gateW / 2, to: outerXMax },
-  ];
-  for (const seg of northSegs) {
-    const w = seg.to - seg.from;
-    if (w > 1) addFenceSegment(w, fenceT, (seg.from + seg.to) / 2, 0, outerZMin);
-  }
-  for (const gx of [dfwX, dwwX]) {
-    for (const off of [-gateW / 2, gateW / 2]) {
-      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 3, 6), gateMat);
-      p.position.set(gx + off, 1.5, outerZMin); scene.add(p);
-    }
-    scene.add(makeBox(gateW + 1, 0.4, 0.8, gateMat, gx, 3.2, outerZMin));
-    scene.add(makeBox(gateW - 1, 0.3, 0.1, new THREE.MeshStandardMaterial({
-      color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5 }),
-      gx, 3.0, outerZMin - 0.45));
-  }
-
-  // === DIVIDING HEDGE with artist door ===
-  const divX = -2.5;
-  const doorZ = 0; // door position along the hedge
-  const doorW = 1.5;
-  const doorH = 2.2;
-  // Hedge north of door (z from -82 to doorZ-1)
-  const northHedgeD = (doorZ - 1) - outerZMin;
-  if (northHedgeD > 2) addFenceSegment(fenceT, northHedgeD, divX, 0, outerZMin + northHedgeD / 2);
-  // Hedge south of door (z from doorZ+1 to 155)
-  const southHedgeD = outerZMax - (doorZ + 1);
-  if (southHedgeD > 2) addFenceSegment(fenceT, southHedgeD, divX, 0, (doorZ + 1) + southHedgeD / 2);
-
-  // Door in the hedge + red button
-  const doorFrameMat = getCachedMat('artist_doorframe', () => new THREE.MeshStandardMaterial({
-    color: 0x555555, metalness: 0.4, roughness: 0.3,
-  }));
-  scene.add(makeBox(doorW + 0.3, doorH + 0.2, 0.6, doorFrameMat, divX, doorH / 2, doorZ));
-  const artistDoor = makeBox(doorW, doorH, 0.15,
-    getCachedMat('artist_door', () => new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 0.5 })),
-    divX, doorH / 2, doorZ);
-  scene.add(artistDoor);
-  // Door collider
-  addCollider(divX, doorZ, doorW + 0.5, 0.6);
-  const artistDoorColliderIdx = colliders.length - 1;
-
-  // Red button (on DFW side of hedge)
-  const redButton = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.2, 0.2, 0.1, 8),
-    new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 1.0 }));
-  redButton.rotation.x = Math.PI / 2;
-  redButton.position.set(divX - 0.5, 1.2, doorZ - 0.4);
-  scene.add(redButton);
-  // Sign
-  scene.add(makeBox(1.2, 0.25, 0.05, new THREE.MeshStandardMaterial({
-    color: 0xffcc00, emissive: 0xffcc00, emissiveIntensity: 0.5 }),
-    divX, doorH + 0.3, doorZ - 0.35));
-
-  // Click handler
-  const raycaster = new THREE.Raycaster(); raycaster.far = 5;
-  let artistDoorOpen = false;
-  document.addEventListener('click', () => {
-    if (!controller.isLocked) return;
-    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-    if (raycaster.intersectObject(redButton).length > 0) {
-      artistDoorOpen = !artistDoorOpen;
-      artistDoor.visible = !artistDoorOpen;
-      if (artistDoorOpen) { colliders[artistDoorColliderIdx].min.x = 999; colliders[artistDoorColliderIdx].max.x = 999; }
-      else { colliders[artistDoorColliderIdx].min.x = divX - 1; colliders[artistDoorColliderIdx].max.x = divX + 1; }
-    }
-  });
+  // TWO EQUAL-SIZE perimeters (each 150m wide, symmetric)
+  const outerZMin = -82, outerZMax = 155;
+  // DFW: x = -153 to -3 (150m)
+  createPerimeter(-153, -3, outerZMin, outerZMax, dfwX);
+  // DWW: x = 3 to 153 (150m)
+  createPerimeter(3, 153, outerZMin, outerZMax, dwwX);
 
   // Flowers (fewer, bigger)
   const flowerColors = [0xff6699, 0xff3366, 0xffaa00, 0xff66cc, 0xcc44ff];
@@ -2632,8 +2555,8 @@ function init() {
     renderer.toneMappingExposure = 1.2;
     // Show cloud sprites during day
     for (const c of cloudSprites) c.sprite.visible = true;
-    // Interior lights: normal intensity
-    for (const ll of lobbyLights) ll.intensity = ll._dayIntensity;
+    // Interior lights: always same brightness (day level)
+    for (const ll of lobbyLights) ll.intensity = ll._dayIntensity * 10;
     document.getElementById('btnDay').classList.add('active');
     document.getElementById('btnNight').classList.remove('active');
     // Regenerate envmap with day sky (delayed so shader updates first)
