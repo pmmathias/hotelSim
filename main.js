@@ -2564,7 +2564,7 @@ function init() {
   }
   function setNightMode() {
     isNightMode = true;
-    sunLight.intensity = 0.0;           // no sunlight
+    sunLight.intensity = 2.0;           // SAME as day (keeps interiors identical)
     ambientLight.intensity = 0.5;       // SAME as day
     ambientLight.color.set(0x88aacc);  // SAME as day
     hemiLight.intensity = 0.4;  // SAME as day
@@ -2680,9 +2680,9 @@ function animate() {
         strip.mat.emissiveIntensity = strobe;
         strip.mat.color.copy(_tmpColor);
       } else {
-        // Default: rainbow hue cycle – very high emissive to cut through low exposure
+        // Rainbow hue cycle – saturated colors, never white
         const hue = (elapsedTime * 0.12 + strip.phase) % 1.0;
-        _tmpColor.setHSL(hue, 1.0, 0.65);
+        _tmpColor.setHSL(hue, 1.0, 0.45); // lightness 0.45 = vivid colors, never white
         const intensity = 63.0 + Math.sin(elapsedTime * 3.0 + strip.phase * 4) * 26.0;
         strip.mat.emissive.copy(_tmpColor);
         strip.mat.emissiveIntensity = intensity;
