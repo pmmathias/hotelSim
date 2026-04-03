@@ -168,6 +168,7 @@ let isNightMode = false;
 let sunLight = null;
 let ambientLight = null;
 let hemiLight = null;
+const lobbyLights = []; // collect all interior PointLights for day/night adjustment
 let envMap = null;
 let camera; // module-level ref for LOD updates
 
@@ -831,7 +832,9 @@ function createLobbyInterior(group, width, depth, floorH, name) {
     // PointLight as pendant lamp (1.5m below ceiling for proper light distribution)
     const pl = new THREE.PointLight(0xfff0dd, lg.int * 5, 45);
     pl.position.set(lg.x, floorH - 1.5, lg.z);
+    pl._dayIntensity = lg.int * 5;
     group.add(pl);
+    lobbyLights.push(pl);
     // Emissive ceiling panel (stays at ceiling)
     group.add(makeBox(3.5, 0.06, 1.2, ceilPanelMat, lg.x, floorH - 0.08, lg.z));
     // Pendant rod connecting panel to light
@@ -937,7 +940,9 @@ function createSecondFloor(group, width, depth, floorH, name) {
   }
   // Single PointLight for depth
   const hl = new THREE.PointLight(0xfff5e0, 5.0, 25);
-  hl.position.set(0, y + floorH - 1.5, hallZ); // pendant height
+  hl.position.set(0, y + floorH - 1.5, hallZ);
+  hl._dayIntensity = 5.0;
+  lobbyLights.push(hl);
   group.add(hl);
 
   // === ROOMS (4 rooms along the south side, doors opening to hallway) ===
@@ -2627,6 +2632,8 @@ function init() {
     renderer.toneMappingExposure = 1.2;
     // Show cloud sprites during day
     for (const c of cloudSprites) c.sprite.visible = true;
+    // Interior lights: normal intensity
+    for (const ll of lobbyLights) ll.intensity = ll._dayIntensity;
     document.getElementById('btnDay').classList.add('active');
     document.getElementById('btnNight').classList.remove('active');
     // Regenerate envmap with day sky (delayed so shader updates first)
@@ -2647,6 +2654,8 @@ function init() {
     renderer.toneMappingExposure = 0.6; // LOW exposure = dark surfaces
     // Hide cloud sprites
     for (const c of cloudSprites) c.sprite.visible = false;
+    // Interior lights: MUCH brighter to compensate for no ambient/sun
+    for (const ll of lobbyLights) ll.intensity = ll._dayIntensity * 10;
     document.getElementById('btnNight').classList.add('active');
     document.getElementById('btnDay').classList.remove('active');
     // Regenerate envmap with night sky
