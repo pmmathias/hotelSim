@@ -2565,16 +2565,16 @@ function init() {
   function setNightMode() {
     isNightMode = true;
     sunLight.intensity = 0.0;           // no sunlight
-    ambientLight.intensity = 0.35;      // keep interiors well-lit (almost same as day 0.5)
-    ambientLight.color.set(0x8888aa);  // neutral-cool so it doesn't look like daylight outside
-    hemiLight.intensity = 0.003;
+    ambientLight.intensity = 0.5;       // SAME as day
+    ambientLight.color.set(0x88aacc);  // SAME as day
+    hemiLight.intensity = 0.4;  // SAME as day
     scene.fog.color.set(0x010103);
     scene.fog.density = 0.006; // thicker fog so outside stays dark despite higher ambient
     if (skyUniforms) {
       skyUniforms.nightMix.value = 1.0;
       skyUniforms.sunIntensity.value = 0.0;
     }
-    renderer.toneMappingExposure = 0.6; // LOW exposure = dark surfaces
+    renderer.toneMappingExposure = 1.2; // SAME as day so interiors look identical
     // Hide cloud sprites
     for (const c of cloudSprites) c.sprite.visible = false;
     // Interior lights: MUCH brighter to compensate for no ambient/sun
