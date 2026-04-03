@@ -2669,13 +2669,13 @@ function animate() {
         }
         const pulse = 1.0 + Math.sin(elapsedTime * 4 + strip.phase * 5) * 0.4;
         strip.mat.emissive.copy(_tmpColor);
-        strip.mat.emissiveIntensity = pulse * 10.0;
+        strip.mat.emissiveIntensity = pulse * 50.0;
         strip.mat.color.copy(_tmpColor);
       } else if (strip.style === 'disco') {
         // Disco lights: rapid strobe-like color flashing
         const hue = (elapsedTime * 0.5 + strip.phase) % 1.0;
         _tmpColor.setHSL(hue, 1.0, 0.6);
-        const strobe = Math.sin(elapsedTime * 8 + strip.phase * 7) > 0 ? 20.0 : 3.0;
+        const strobe = Math.sin(elapsedTime * 8 + strip.phase * 7) > 0 ? 100.0 : 15.0;
         strip.mat.emissive.copy(_tmpColor);
         strip.mat.emissiveIntensity = strobe;
         strip.mat.color.copy(_tmpColor);
@@ -2683,7 +2683,7 @@ function animate() {
         // Default: rainbow hue cycle – very high emissive to cut through low exposure
         const hue = (elapsedTime * 0.12 + strip.phase) % 1.0;
         _tmpColor.setHSL(hue, 1.0, 0.65);
-        const intensity = 12.0 + Math.sin(elapsedTime * 3.0 + strip.phase * 4) * 5.0;
+        const intensity = 60.0 + Math.sin(elapsedTime * 3.0 + strip.phase * 4) * 25.0;
         strip.mat.emissive.copy(_tmpColor);
         strip.mat.emissiveIntensity = intensity;
         strip.mat.color.copy(_tmpColor);
