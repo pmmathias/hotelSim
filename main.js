@@ -1956,7 +1956,7 @@ function buildScene(scene) {
 
   createPool(scene, dfwX + 10, dfwZ + 20, 55, 28);
   createPool(scene, dfwX - 30, dfwZ + 25, 12, 8);
-  createPool(scene, dfwX + 65, dfwZ + 15, 18, 12);
+  createPool(scene, dfwX + 50, dfwZ + 15, 18, 12); // moved left to stay inside DFW perimeter
   // DFW: 5 waterslides across 3 towers
   // Tower 1: Tall main tower – 2 big slides (pink/cyan)
   // DFW slides: positioned near pools, AWAY from stage (stage is at dfwX-10, dfwZ+55)
@@ -2565,11 +2565,11 @@ function init() {
   function setNightMode() {
     isNightMode = true;
     sunLight.intensity = 0.0;           // no sunlight
-    ambientLight.intensity = 0.04;      // slight ambient so interiors are visible
-    ambientLight.color.set(0x0a1020);
+    ambientLight.intensity = 0.35;      // keep interiors well-lit (almost same as day 0.5)
+    ambientLight.color.set(0x8888aa);  // neutral-cool so it doesn't look like daylight outside
     hemiLight.intensity = 0.003;
     scene.fog.color.set(0x010103);
-    scene.fog.density = 0.004;
+    scene.fog.density = 0.006; // thicker fog so outside stays dark despite higher ambient
     if (skyUniforms) {
       skyUniforms.nightMix.value = 1.0;
       skyUniforms.sunIntensity.value = 0.0;
