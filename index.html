@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="manifest.json">
+  <title>Dream World Hotels – Side, Kumköy (3D)</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; width: 100%; height: 100%; }
+    canvas { display: block; width: 100% !important; height: 100% !important; }
+    /* iOS safe area support */
+    body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+
+    #hud {
+      position: fixed; top: 12px; left: 12px;
+      color: #fff; font-size: 13px; line-height: 1.6;
+      background: rgba(0,0,0,0.55); padding: 10px 14px;
+      border-radius: 8px; pointer-events: none;
+      backdrop-filter: blur(4px); z-index: 10;
+      max-width: 320px;
+    }
+    #hud h3 { margin-bottom: 4px; font-size: 14px; color: #8cf; }
+    #hud .key { color: #fc0; font-weight: 600; }
+
+    #minimap {
+      position: fixed; bottom: 12px; right: 12px;
+      width: 180px; height: 180px;
+      background: rgba(0,0,0,0.6); border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 8px; z-index: 10;
+    }
+
+    #crosshair { display: none; }
+
+    #loading {
+      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+      background: #111; color: #fff; font-size: 20px; z-index: 100;
+      flex-direction: column; gap: 16px;
+    }
+    #loading .bar { width: 300px; height: 6px; background: #333; border-radius: 3px; }
+    #loading .bar-fill { height: 100%; background: #4af; border-radius: 3px; width: 0%; transition: width 0.3s; }
+
+    #debug {
+      position: fixed; top: 12px; right: 12px;
+      color: #0f0; font-size: 11px; font-family: monospace;
+      background: rgba(0,0,0,0.5); padding: 6px 10px;
+      border-radius: 6px; pointer-events: none; z-index: 10;
+    }
+
+    #daynight {
+      position: fixed; bottom: 12px; left: 12px;
+      z-index: 10; display: flex; gap: 6px;
+    }
+    #daynight button {
+      width: 48px; height: 48px; border: 2px solid rgba(255,255,255,0.4);
+      border-radius: 50%; font-size: 24px; cursor: pointer;
+      background: rgba(0,0,0,0.5); color: #fff;
+      backdrop-filter: blur(4px); transition: all 0.3s;
+    }
+    #daynight button:hover { transform: scale(1.1); border-color: #fff; }
+    #daynight button { touch-action: manipulation; }
+    #daynight button.active { border-color: #fc0; background: rgba(255,200,0,0.3); }
+
+    #mobilePlay {
+      position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.92); z-index: 200; flex-direction: column; gap: 16px;
+      padding: 20px;
+    }
+    #mobilePlay h2 { color: #fc0; font-size: 22px; margin-bottom: 4px; }
+    #mobilePlay button {
+      padding: 18px 50px; font-size: 26px; border: 3px solid #fc0; border-radius: 16px;
+      background: rgba(255,200,0,0.2); color: #fff; cursor: pointer;
+      touch-action: manipulation;
+    }
+    #mobilePlay p { color: #ccc; font-size: 14px; text-align: center; max-width: 340px; line-height: 1.5; }
+    #mobilePlay .tip { color: #888; font-size: 12px; }
+    #fullscreenGuide {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95);
+      z-index: 210; flex-direction: column; align-items: center; justify-content: center;
+      gap: 20px; padding: 30px; text-align: center;
+    }
+    #fullscreenGuide h2 { color: #fc0; font-size: 20px; }
+    #fullscreenGuide .step {
+      display: flex; align-items: center; gap: 14px; color: #fff; font-size: 16px;
+      background: rgba(255,255,255,0.08); padding: 12px 20px; border-radius: 12px;
+      max-width: 360px; width: 100%;
+    }
+    #fullscreenGuide .step-num {
+      width: 36px; height: 36px; border-radius: 50%; background: #fc0; color: #000;
+      display: flex; align-items: center; justify-content: center; font-weight: bold;
+      font-size: 18px; flex-shrink: 0;
+    }
+    #fullscreenGuide .step-icon { font-size: 28px; flex-shrink: 0; }
+    #fullscreenGuide button {
+      padding: 14px 40px; font-size: 18px; border: 2px solid #888; border-radius: 12px;
+      background: rgba(255,255,255,0.1); color: #fff; cursor: pointer;
+      touch-action: manipulation; margin-top: 10px;
+    }
+
+    /* Mobile */
+    @media (max-width: 1024px) and (hover: none) {
+      #daynight button { width: 56px; height: 56px; font-size: 28px; }
+      #hud { font-size: 11px; padding: 6px 10px; max-width: 200px; }
+      #hud h3 { font-size: 11px; }
+      #minimap { width: 90px; height: 90px; bottom: 8px; right: 8px; opacity: 0.7; }
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <div>Lade Dream World Hotels...</div>
+    <div class="bar"><div class="bar-fill" id="loadBar"></div></div>
+  </div>
+
+  <div id="hud">
+    <h3>Dream World Hotels – Side, Kumköy</h3>
+    <span id="controlsDesktop">
+      <span class="key">W/S</span> Vor/Zurück &nbsp;
+      <span class="key">A/D</span> Strafen<br>
+      <span class="key">←/→</span> Drehen &nbsp;
+      <span class="key">Shift</span> Rennen &nbsp;
+      <span class="key">Space</span> Springen<br>
+      <span class="key">M</span> Minimap &nbsp;
+      <span class="key">F</span> Debug
+    </span>
+    <span id="controlsMobile" style="display:none">
+      Neigen = Laufen &nbsp; Kippen = Drehen<br>
+      Tippen = Springen
+    </span>
+    <div id="location" style="margin-top:6px; color:#8cf; font-size:12px;"></div>
+  </div>
+
+  <div id="crosshair"></div>
+  <canvas id="minimap"></canvas>
+  <div id="debug" style="display:none"></div>
+
+  <div id="daynight">
+    <button id="btnDay" class="active" title="Tag">&#9728;</button>
+    <button id="btnNight" title="Nacht">&#9790;</button>
+  </div>
+
+  <div id="mobilePlay">
+    <h2>Dream World Hotels</h2>
+    <button id="mobilePlayBtn">&#9654; PLAY</button>
+    <p>Tilt your phone to move.<br>Tap the screen to jump.</p>
+    <button id="fullscreenHelpBtn" style="padding:10px 24px; font-size:14px; border:1px solid #888; border-radius:8px; background:rgba(255,255,255,0.05); color:#aaa; margin-top:8px;">&#x26F6; Fullscreen Setup</button>
+  </div>
+
+  <div id="fullscreenGuide">
+    <h2>&#x26F6; Fullscreen on iPhone</h2>
+    <div class="step">
+      <span class="step-num">1</span>
+      <span class="step-icon">&#x1F4E4;</span>
+      <span>Tap the <b>Share</b> button at the bottom of Safari</span>
+    </div>
+    <div class="step">
+      <span class="step-num">2</span>
+      <span class="step-icon">&#x2795;</span>
+      <span>Scroll down and tap <b>"Add to Home Screen"</b></span>
+    </div>
+    <div class="step">
+      <span class="step-num">3</span>
+      <span class="step-icon">&#x1F3E0;</span>
+      <span>Tap <b>"Add"</b> – an icon appears on your Home Screen</span>
+    </div>
+    <div class="step">
+      <span class="step-num">4</span>
+      <span class="step-icon">&#x1F680;</span>
+      <span>Open from Home Screen – <b>runs in true fullscreen!</b></span>
+    </div>
+    <p style="color:#888; font-size:12px; margin-top:8px;">This only needs to be done once. The app will always open in fullscreen after that.</p>
+    <button id="fullscreenGuideClose">Got it!</button>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="main.js"></script>
+</body>
+</html>

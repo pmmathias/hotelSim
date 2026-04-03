@@ -1,0 +1,14 @@
+node_modules/
+package-lock.json
+.claude/
+floorplan-*.png
+
+# Internal dev/test files (not for public repo)
+bench.mjs
+perf-deep.mjs
+perf-walk.mjs
+profile.mjs
+walkthrough.mjs
+floorplan.mjs
+consistency-check.mjs
+tickets/
