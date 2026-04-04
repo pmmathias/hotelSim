@@ -410,6 +410,9 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
 
         hiGroup.add(makeBox(balconyW, 0.15, balconyD, balconyMat, bx, by, fz_bal));
         hiGroup.add(makeBox(balconyW, 1, 0.05, glassMat, bx, by + 0.5, fz_rail));
+        // Make balcony walkable (floor + railing collider)
+        addFloor(x + bx, z + faceSign * (depth / 2 + balconyD / 2), balconyW, balconyD, by);
+        addCollider(x + bx, z + faceSign * (depth / 2 + balconyD), balconyW, 0.1, by + 1.2);
         if (faceSign > 0) { // windows only on south
           hiGroup.add(makeBox(balconyW - 0.6, floorH * 0.6, 0.08, glassMat, bx, by, fz_win));
         }
@@ -2311,14 +2314,22 @@ function createAmphitheater(scene, x, z, rotation = 0, size = 'small') {
   }));
   group.add(makeBox(stageW, backdropH, 0.4, backdropMat, 0, stageH + backdropH / 2, -stageD / 2 + 0.2));
 
-  // LED screen on backdrop (huge emissive panel – like a video screen)
-  const screenMat = new THREE.MeshStandardMaterial({
-    color: 0x2244aa, emissive: 0x2244aa, emissiveIntensity: 1.2, roughness: 0.05,
-  });
+  // LED screen with animated Canvas texture (scrolling text + patterns)
   const screenW = stageW - 3;
   const screenH = backdropH - 1.5;
-  group.add(makeBox(screenW, screenH, 0.1, screenMat, 0, stageH + backdropH / 2 + 0.3, -stageD / 2 + 0.45));
-  ledStrips.push({ meshes: [group.children[group.children.length - 1]], mat: screenMat,
+  const screenCanvas = document.createElement('canvas');
+  screenCanvas.width = 512; screenCanvas.height = 128;
+  const screenTex = new THREE.CanvasTexture(screenCanvas);
+  screenTex.wrapS = THREE.RepeatWrapping;
+  const screenMat = new THREE.MeshStandardMaterial({
+    map: screenTex, emissive: 0xffffff, emissiveIntensity: 2.0, emissiveMap: screenTex, roughness: 0.05,
+  });
+  const screenMesh = makeBox(screenW, screenH, 0.1, screenMat, 0, stageH + backdropH / 2 + 0.3, -stageD / 2 + 0.45);
+  group.add(screenMesh);
+  // Register for animation
+  if (!window.__screenCanvases) window.__screenCanvases = [];
+  window.__screenCanvases.push({ canvas: screenCanvas, tex: screenTex, isLarge });
+  ledStrips.push({ meshes: [screenMesh], mat: screenMat,
     phase: isLarge ? 0.3 : 1.8, style: 'screen' });
 
   // Backdrop LED frame around screen
@@ -3484,6 +3495,39 @@ function animate() {
   // Lift physics (every frame for smooth movement)
   updateLifts(camera, dt);
 
+  // Animated LED screens (every 4th frame)
+  if (frameCount % 4 === 0 && window.__screenCanvases) {
+    for (const sc of window.__screenCanvases) {
+      const ctx = sc.canvas.getContext('2d');
+      const w = sc.canvas.width, h = sc.canvas.height;
+      const t = elapsedTime;
+
+      // Background: dark gradient
+      const grad = ctx.createLinearGradient(0, 0, w, 0);
+      const hue1 = (t * 0.05) % 1, hue2 = (t * 0.05 + 0.3) % 1;
+      ctx.fillStyle = `hsl(${hue1 * 360}, 80%, 15%)`;
+      ctx.fillRect(0, 0, w, h);
+
+      // Scrolling text
+      ctx.font = 'bold 48px sans-serif';
+      ctx.fillStyle = `hsl(${hue2 * 360}, 100%, 60%)`;
+      const text = sc.isLarge ? 'DREAM FUN WORLD' : 'DREAM WATER WORLD';
+      const scrollX = ((t * 80) % (w + 600)) - 300;
+      ctx.fillText(text, w - scrollX, h / 2 + 16);
+
+      // Wave pattern below text
+      ctx.strokeStyle = `hsl(${((hue1 + 0.5) % 1) * 360}, 90%, 50%)`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      for (let x = 0; x < w; x += 4) {
+        ctx.lineTo(x, h - 15 + Math.sin(x * 0.03 + t * 3) * 10);
+      }
+      ctx.stroke();
+
+      sc.tex.needsUpdate = true;
+    }
+  }
+
   // Floor culling: only render the floor the player is on (+ adjacent for stairs)
   if (frameCount % 5 === 0) {
     const py = camera.position.y;
@@ -3531,10 +3575,10 @@ function animate() {
         strip.mat.emissiveIntensity = strobe;
         strip.mat.color.copy(_tmpColor);
       } else {
-        // Rainbow hue cycle – saturated colors, never white
-        const hue = (elapsedTime * 0.12 + strip.phase) % 1.0;
-        _tmpColor.setHSL(hue, 1.0, 0.45); // lightness 0.45 = vivid colors, never white
-        const intensity = 63.0 + Math.sin(elapsedTime * 3.0 + strip.phase * 4) * 26.0;
+        // Multi-color: each strip gets its OWN hue based on phase (multiple colors visible simultaneously)
+        const hue = (elapsedTime * 0.08 + strip.phase * 0.7) % 1.0;
+        _tmpColor.setHSL(hue, 1.0, 0.45);
+        const intensity = 63.0 + Math.sin(elapsedTime * 2.5 + strip.phase * 6) * 26.0;
         strip.mat.emissive.copy(_tmpColor);
         strip.mat.emissiveIntensity = intensity;
         strip.mat.color.copy(_tmpColor);
