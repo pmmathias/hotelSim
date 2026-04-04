@@ -2031,10 +2031,10 @@ function createPool(scene, x, z, w, d) {
       sunDirection: new THREE.Vector3(100, 120, 80).normalize(),
       sunColor: 0xffffff,
       waterColor: 0x006994,
-      distortionScale: 0.6,
+      distortionScale: 1.2,  // more wave distortion for realistic reflections
       fog: false, alpha: 0.92,
     });
-    waterSurface.material.uniforms['size'].value = 0.3;
+    waterSurface.material.uniforms['size'].value = 0.15; // finer micro-waves
     waterSurface.rotation.x = -Math.PI / 2;
     waterSurface.position.set(x, 0.35, z);
     scene.add(waterSurface);
@@ -2147,7 +2147,7 @@ function createWaterSlide(scene, x, z, height, colors) {
 
       points.push(new THREE.Vector3(px, y, pz));
     }
-    const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 12, 0.6, 4, false), tubeMat);
+    const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 24, 0.6, 8, false), tubeMat);
     tube.castShadow = true;
     group.add(tube);
   });
@@ -2694,6 +2694,17 @@ function buildScene(scene) {
   const skyResult = applySkyGradient(scene);
   skyUniforms = skyResult.uniforms;
   skyMesh = skyResult.mesh;
+
+  // 3D Moon object (visible at night, follows camera like sky)
+  const moonGeo = new THREE.SphereGeometry(8, 16, 16);
+  const moonMat = new THREE.MeshStandardMaterial({
+    color: 0xffffee, emissive: 0xffffdd, emissiveIntensity: 3.0, roughness: 0.8,
+  });
+  const moonMesh = new THREE.Mesh(moonGeo, moonMat);
+  moonMesh.position.set(-200, 300, -150); // high in the sky
+  moonMesh.visible = false; // only at night
+  scene.add(moonMesh);
+  window.__moonMesh = moonMesh;
 
   // === TERRAIN with gentle hills (inspired by VogelSimulator) ===
   createTerrain(scene);
@@ -3366,6 +3377,7 @@ function init() {
     renderer.toneMappingExposure = 1.2;
     // Show cloud sprites during day
     for (const c of cloudSprites) c.sprite.visible = true;
+    if (window.__moonMesh) window.__moonMesh.visible = false;
     // Interior lights: always same brightness (day level)
     for (const ll of lobbyLights) ll.intensity = ll._dayIntensity * 10;
     document.getElementById('btnDay').classList.add('active');
@@ -3388,6 +3400,7 @@ function init() {
     renderer.toneMappingExposure = 1.2; // SAME as day so interiors look identical
     // Hide cloud sprites
     for (const c of cloudSprites) c.sprite.visible = false;
+    if (window.__moonMesh) window.__moonMesh.visible = true;
     // Interior lights: MUCH brighter to compensate for no ambient/sun
     for (const ll of lobbyLights) ll.intensity = ll._dayIntensity * 10;
     document.getElementById('btnNight').classList.add('active');
@@ -3555,8 +3568,12 @@ function animate() {
   // Sky dome follows camera exactly (prevent walking out of skydome)
   if (skyMesh) {
     skyMesh.position.x = camera.position.x;
-    skyMesh.position.y = 0; // keep sky centered vertically
+    skyMesh.position.y = 0;
     skyMesh.position.z = camera.position.z;
+  }
+  if (window.__moonMesh && window.__moonMesh.visible) {
+    window.__moonMesh.position.x = camera.position.x - 200;
+    window.__moonMesh.position.z = camera.position.z - 150;
   }
 
   composer.render(dt);
