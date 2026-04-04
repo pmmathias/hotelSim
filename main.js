@@ -163,6 +163,7 @@ const waterMeshes = [];
 const ledStrips = [];
 const autoDoors = [];     // { mesh, worldPos, openOffset, isOpen, t }
 const lifts = [];         // { buildingX, buildingZ, localX, localZ, w, d, currentFloor, state, timer, targetFloor, doorL, doorR }
+const floorGroups = [];   // { group, buildingX, buildingZ, floorNum, yMin, yMax }
 const stageLights = [];
 let skyUniforms = null;
 let skyMesh = null;
@@ -653,15 +654,25 @@ function createHotelInterior(group, width, depth, floorH, name) {
   }));
 
   // === ERDGESCHOSS (y=0..H) ===
-  createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woodMat, accentMat, ceilPanelMat, isWater);
+  const egGroup = new THREE.Group();
+  createGroundFloor(egGroup, W, D, H, T, marbleMat, damaskMat, ceilMat, woodMat, accentMat, ceilPanelMat, isWater);
+  group.add(egGroup);
+  floorGroups.push({ group: egGroup, buildingX: _currentBuildingX, buildingZ: _currentBuildingZ, floorNum: 0, yMin: 0, yMax: H });
 
-  // === STAIRCASE (east side, all 3 floors) ===
+  // === STAIRCASE (east side, all 3 floors – always visible) ===
   createStaircase(group, W, D, H, marbleMat, damaskMat, ceilPanelMat);
 
   // === 1. OG (y=H..2H) ===
-  createUpperFloor(group, W, D, H, 1, damaskMat, ceilMat, woodMat, ceilPanelMat, accentColor);
+  const og1Group = new THREE.Group();
+  createUpperFloor(og1Group, W, D, H, 1, damaskMat, ceilMat, woodMat, ceilPanelMat, accentColor);
+  group.add(og1Group);
+  floorGroups.push({ group: og1Group, buildingX: _currentBuildingX, buildingZ: _currentBuildingZ, floorNum: 1, yMin: H, yMax: H * 2 });
+
   // === 2. OG (y=2H..3H) ===
-  createUpperFloor(group, W, D, H, 2, damaskMat, ceilMat, woodMat, ceilPanelMat, accentColor);
+  const og2Group = new THREE.Group();
+  createUpperFloor(og2Group, W, D, H, 2, damaskMat, ceilMat, woodMat, ceilPanelMat, accentColor);
+  group.add(og2Group);
+  floorGroups.push({ group: og2Group, buildingX: _currentBuildingX, buildingZ: _currentBuildingZ, floorNum: 2, yMin: H * 2, yMax: H * 3 });
 }
 
 function createStaircase(group, W, D, H, marbleMat, damaskMat, ceilPanelMat) {
@@ -3430,6 +3441,25 @@ function animate() {
 
   // Lift physics (every frame for smooth movement)
   updateLifts(camera, dt);
+
+  // Floor culling: only render the floor the player is on (+ adjacent for stairs)
+  if (frameCount % 5 === 0) {
+    const py = camera.position.y;
+    const px = camera.position.x;
+    const pz = camera.position.z;
+    for (const fg of floorGroups) {
+      // Check if player is in this building
+      const inBuilding = Math.abs(px - fg.buildingX) < 60 && Math.abs(pz - fg.buildingZ) < 20;
+      if (!inBuilding) {
+        fg.group.visible = false;
+        continue;
+      }
+      // Show current floor + adjacent (for stairs/lift transition)
+      const playerFloor = Math.max(0, Math.floor((py - PLAYER_HEIGHT + 1) / 6));
+      const floorDist = Math.abs(fg.floorNum - playerFloor);
+      fg.group.visible = floorDist <= 1; // current + 1 above/below
+    }
+  }
 
   // LED strips: animated at night – BRIGHT!
   if (frameCount % 2 === 0 && isNightMode) {
