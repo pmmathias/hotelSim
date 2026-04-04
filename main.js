@@ -1293,130 +1293,210 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
 // KUMKÖY CITY – Streets, Shops, Restaurants, Neon Lights
 // =============================================================================
 function createCity(scene) {
-  const cityZStart = -95; // just north of the hotel road
-  const cityZEnd = -230;
+  const cityZStart = -95, cityZEnd = -230;
   const cityXMin = -200, cityXMax = 200;
-  const blockSize = 40; // each city block is 40x40m
-  const streetW = 8; // street width
+  const blockSize = 40, streetW = 8;
+  const cityGroup = new THREE.Group();
 
-  // Materials (cached, shared)
+  // === MATERIALS (textured, realistic) ===
   const roadMat2 = getCachedMat('city_road', () => new THREE.MeshStandardMaterial({
-    color: 0x333333, roughness: 0.9,
+    color: 0x333333, roughness: 0.9, map: textures.concrete,
     polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3,
   }));
   const sidewalkMat2 = getCachedMat('city_sidewalk', () => new THREE.MeshStandardMaterial({
-    color: 0xbbbbaa, roughness: 0.8,
+    map: textures.concrete, color: 0xccccbb, roughness: 0.75,
     polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
-  }));
-  const shopWallMat = getCachedMat('shop_wall', () => new THREE.MeshStandardMaterial({
-    color: 0xf0e8d8, roughness: 0.85,
   }));
   const shopRoofMat = getCachedMat('shop_roof', () => new THREE.MeshStandardMaterial({
     color: 0xcc6633, roughness: 0.8,
   }));
+  const glassMat3 = getCachedMat('shopglass', () => new THREE.MeshStandardMaterial({
+    color: 0x88aacc, transparent: true, opacity: 0.25, roughness: 0.05, metalness: 0.1,
+    envMap, envMapIntensity: 0.6,
+  }));
+  const curbMat = getCachedMat('curb', () => new THREE.MeshStandardMaterial({
+    color: 0x999999, roughness: 0.7,
+  }));
+  const benchMat = getCachedMat('bench', () => new THREE.MeshStandardMaterial({
+    color: 0x5a4030, roughness: 0.6,
+  }));
+  const binMat = getCachedMat('bin', () => new THREE.MeshStandardMaterial({
+    color: 0x444444, metalness: 0.3, roughness: 0.5,
+  }));
 
-  // City chunk group (for culling)
-  const cityGroup = new THREE.Group();
+  // Facade textures (5 variations using existing wall + damask textures)
+  const facadeMats = [];
+  const facadeColors = [0xf2e8d5, 0xe5dcc8, 0xddd0b8, 0xf0e0c0, 0xe8d5bf];
+  for (let i = 0; i < 5; i++) {
+    facadeMats.push(getCachedMat('facade_' + i, () => new THREE.MeshStandardMaterial({
+      map: i % 2 === 0 ? textures.wall : textures.damask,
+      color: facadeColors[i], roughness: 0.82,
+    })));
+  }
 
-  // Cross streets (north-south)
+  // Sockel (dark base) material
+  const sockelMat = getCachedMat('sockel', () => new THREE.MeshStandardMaterial({
+    color: 0x6a6058, roughness: 0.9,
+  }));
+
+  // Shopfront warm glow (behind glass, simulates lit interior)
+  const interiorGlowMat = getCachedMat('shop_glow', () => new THREE.MeshStandardMaterial({
+    color: 0xffeedd, emissive: 0xffddbb, emissiveIntensity: 0.5, roughness: 0.9,
+  }));
+
+  // === STREETS ===
   for (let x = cityXMin; x <= cityXMax; x += blockSize + streetW) {
-    const road = makePlane(streetW, Math.abs(cityZEnd - cityZStart), roadMat2,
-      x, 0.06, (cityZStart + cityZEnd) / 2);
-    cityGroup.add(road);
+    cityGroup.add(makePlane(streetW, Math.abs(cityZEnd - cityZStart), roadMat2, x, 0.06, (cityZStart + cityZEnd) / 2));
   }
-
-  // Parallel streets (east-west)
   for (let z = cityZStart - streetW; z >= cityZEnd; z -= blockSize + streetW) {
-    const road = makePlane(cityXMax - cityXMin, streetW, roadMat2,
-      0, 0.06, z);
-    cityGroup.add(road);
-    // Sidewalks on both sides
-    cityGroup.add(makePlane(cityXMax - cityXMin, 2, sidewalkMat2, 0, 0.08, z - streetW / 2 - 1));
-    cityGroup.add(makePlane(cityXMax - cityXMin, 2, sidewalkMat2, 0, 0.08, z + streetW / 2 + 1));
+    cityGroup.add(makePlane(cityXMax - cityXMin, streetW, roadMat2, 0, 0.06, z));
+    // Sidewalks (textured concrete)
+    for (const side of [-1, 1]) {
+      cityGroup.add(makePlane(cityXMax - cityXMin, 2.5, sidewalkMat2, 0, 0.09, z + side * (streetW / 2 + 1.25)));
+      // Curb edge (raised strip)
+      cityGroup.add(makeBox(cityXMax - cityXMin, 0.15, 0.2, curbMat, 0, 0.12, z + side * streetW / 2));
+    }
+    // Zebra crossings at intersections
+    for (let cx = cityXMin; cx <= cityXMax; cx += blockSize + streetW) {
+      for (let stripe = -3; stripe <= 3; stripe++) {
+        cityGroup.add(makePlane(1.2, 0.5, getCachedMat('zebra', () => new THREE.MeshStandardMaterial({
+          color: 0xeeeeee, roughness: 0.8,
+          polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5,
+        })), cx, 0.08, z + stripe * 1));
+      }
+    }
   }
 
-  // Shop buildings in each city block
-  const shopColors = [0xf5e8d0, 0xe0d0b8, 0xd8ccc0, 0xf0e0c8, 0xe8d8c0];
-  const neonColors = [0xff4488, 0x44ff88, 0x4488ff, 0xffaa00, 0xff44ff, 0x44ffff];
-  const shopNames = ['CAFE', 'BAR', 'SHOP', 'MARKET', 'KEBAB', 'JEWELS', 'CARPET', 'SPICE'];
+  // === SHOPS (textured, with windows, doors, sockel, schaufenster) ===
+  const neonColors = [0xff4488, 0x44ff88, 0x4488ff, 0xffaa00, 0xff44ff, 0x44ffff, 0xff6633, 0x33ffcc];
+  const awningColors = [0xcc3333, 0x3333cc, 0x33cc33, 0xccaa33, 0xcc33aa];
 
   let shopCount = 0;
   for (let bx = cityXMin + streetW; bx < cityXMax - blockSize; bx += blockSize + streetW) {
     for (let bz = cityZStart - streetW - 2; bz > cityZEnd + blockSize; bz -= blockSize + streetW) {
-      // 2-4 shops per block edge (south side facing the street)
       const shopsOnEdge = 2 + Math.floor(Math.random() * 3);
       const shopW = (blockSize - 4) / shopsOnEdge;
 
       for (let si = 0; si < shopsOnEdge; si++) {
         const sx = bx + 2 + si * shopW + shopW / 2;
         const sz = bz - 1;
-        const sH = 4 + Math.random() * 3; // 4-7m tall
-        const sD = 6 + Math.random() * 4; // 6-10m deep
-        const color = shopColors[shopCount % shopColors.length];
+        const sH = 4 + Math.random() * 3;
+        const sD = 6 + Math.random() * 4;
+        const facadeMat = facadeMats[shopCount % 5];
 
-        // Shop walls
-        const wallMat = getCachedMat('shop_' + (shopCount % 5), () =>
-          new THREE.MeshStandardMaterial({ color, roughness: 0.85 }));
-        const shop = makeBox(shopW - 1, sH, sD, wallMat, sx, sH / 2, sz - sD / 2);
+        // Main building (textured facade)
+        const shop = makeBox(shopW - 1, sH, sD, facadeMat, sx, sH / 2, sz - sD / 2);
         shop.castShadow = true; shop.receiveShadow = true;
         cityGroup.add(shop);
 
-        // Flat roof
+        // Dark sockel (base strip, 0.8m tall)
+        cityGroup.add(makeBox(shopW - 0.8, 0.8, 0.15, sockelMat, sx, 0.4, sz + 0.05));
+
+        // Roof
         cityGroup.add(makeBox(shopW, 0.2, sD + 0.5, shopRoofMat, sx, sH + 0.1, sz - sD / 2));
 
-        // Shop sign (neon, emissive)
+        // Schaufenster (large glass window, ground floor)
+        const winW = shopW - 2.5;
+        cityGroup.add(makeBox(winW, 2.0, 0.08, glassMat3, sx, 1.8, sz + 0.05));
+        // Interior glow behind glass (warm lit shop inside)
+        cityGroup.add(makeBox(winW - 0.2, 1.8, 0.04, interiorGlowMat, sx, 1.8, sz - 0.1));
+
+        // Upper floor windows (2 small windows)
+        if (sH > 5) {
+          for (const wx of [-shopW / 4, shopW / 4]) {
+            cityGroup.add(makeBox(1.2, 1.0, 0.06, glassMat3, sx + wx, sH - 1.5, sz + 0.05));
+          }
+        }
+
+        // Door (wood frame + dark opening)
+        const doorMat2 = getCachedMat('shop_door', () => new THREE.MeshStandardMaterial({
+          map: textures.woodWalnut, roughness: 0.5,
+        }));
+        cityGroup.add(makeBox(1.0, 2.2, 0.1, doorMat2, sx + shopW / 2 - 1.5, 1.1, sz + 0.05));
+
+        // Awning (striped canopy)
+        const awningMat = getCachedMat('awning_' + (shopCount % 5), () => new THREE.MeshStandardMaterial({
+          color: awningColors[shopCount % 5], roughness: 0.8, side: THREE.DoubleSide,
+        }));
+        cityGroup.add(makeBox(shopW - 0.5, 0.1, 1.8, awningMat, sx, 3.0, sz + 0.9));
+
+        // Neon sign
         const neonColor = neonColors[shopCount % neonColors.length];
         const signMat3 = new THREE.MeshStandardMaterial({
           color: neonColor, emissive: neonColor, emissiveIntensity: 0.3, roughness: 0.2,
         });
-        cityGroup.add(makeBox(shopW - 2, 0.8, 0.1, signMat3, sx, sH - 0.5, sz + 0.1));
-
-        // At night, these signs will glow (registered as LED strips)
+        cityGroup.add(makeBox(shopW - 2, 0.6, 0.08, signMat3, sx, sH - 0.4, sz + 0.12));
         ledStrips.push({ meshes: [cityGroup.children[cityGroup.children.length - 1]],
           mat: signMat3, phase: shopCount * 0.3, style: 'neon' });
 
-        // Awning/canopy over shop front
-        const awningMat = getCachedMat('awning_' + (shopCount % 3), () =>
-          new THREE.MeshStandardMaterial({
-            color: [0xcc3333, 0x3333cc, 0x33cc33][shopCount % 3], roughness: 0.8, side: THREE.DoubleSide,
-          }));
-        cityGroup.add(makeBox(shopW - 0.5, 0.08, 1.5, awningMat, sx, 3.2, sz + 0.8));
+        // Flower box on schaufenster sill
+        if (shopCount % 3 === 0) {
+          const potMat2 = getCachedMat('pot', () => new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.7 }));
+          const plantMat2 = getCachedMat('plant', () => new THREE.MeshStandardMaterial({ color: 0x2a7a2a, roughness: 0.8 }));
+          cityGroup.add(makeBox(winW * 0.6, 0.2, 0.25, potMat2, sx, 0.85, sz + 0.15));
+          cityGroup.add(makeBox(winW * 0.5, 0.3, 0.15, plantMat2, sx, 1.1, sz + 0.15));
+        }
 
-        // Collider
         addCollider(sx, sz - sD / 2, shopW - 1, sD);
-
         shopCount++;
       }
 
-      // Buildings on north side of block too
+      // North side buildings (simpler, residential style)
       for (let si = 0; si < 2; si++) {
         const sx = bx + 5 + si * (blockSize / 2 - 3);
         const sz = bz - blockSize + 1;
         const sH = 5 + Math.random() * 4;
         const sD = 8;
-        const color = shopColors[(shopCount + 2) % shopColors.length];
-        const wallMat = getCachedMat('shop_' + ((shopCount + 2) % 5), () =>
-          new THREE.MeshStandardMaterial({ color, roughness: 0.85 }));
-        cityGroup.add(makeBox(blockSize / 2 - 4, sH, sD, wallMat, sx, sH / 2, sz + sD / 2));
+        cityGroup.add(makeBox(blockSize / 2 - 4, sH, sD, facadeMats[(shopCount + 2) % 5], sx, sH / 2, sz + sD / 2));
         cityGroup.add(makeBox(blockSize / 2 - 3, 0.2, sD + 0.5, shopRoofMat, sx, sH + 0.1, sz + sD / 2));
+        // Windows
+        for (let wy = 2; wy < sH - 1; wy += 2.5) {
+          for (let wx = -5; wx <= 5; wx += 3.5) {
+            cityGroup.add(makeBox(1.0, 1.2, 0.06, glassMat3, sx + wx, wy, sz + 0.05));
+          }
+        }
         addCollider(sx, sz + sD / 2, blockSize / 2 - 4, sD);
         shopCount++;
       }
     }
   }
 
-  // Street lamps along city streets
-  const cityLampMat = getCachedMat('lamp', () => new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.4 }));
-  const cityBulbMat = getCachedMat('bulb', () => new THREE.MeshStandardMaterial({
-    color: 0xffffcc, emissive: 0xffffaa, emissiveIntensity: 0.8 }));
+  // === STREET FURNITURE ===
+  let furnitureCount = 0;
   for (let z = cityZStart - 15; z > cityZEnd; z -= 25) {
     for (let x = cityXMin + 20; x < cityXMax; x += 50) {
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 5, 4), cityLampMat);
-      pole.position.set(x, 2.5, z);
-      cityGroup.add(pole);
-      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.3, 4, 4), cityBulbMat);
-      bulb.position.set(x, 5.1, z);
-      cityGroup.add(bulb);
+      // Street lamp
+      const lampMat2 = getCachedMat('lamp', () => new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.4 }));
+      const bulbMat2 = getCachedMat('bulb', () => new THREE.MeshStandardMaterial({ color: 0xffffcc, emissive: 0xffffaa, emissiveIntensity: 0.8 }));
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 5, 4), lampMat2);
+      pole.position.set(x, 2.5, z); cityGroup.add(pole);
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.25, 4, 4), bulbMat2);
+      bulb.position.set(x, 5.1, z); cityGroup.add(bulb);
+
+      // Bench (every other lamp)
+      if (furnitureCount % 2 === 0) {
+        cityGroup.add(makeBox(1.8, 0.04, 0.5, benchMat, x + 2, 0.48, z));
+        cityGroup.add(makeBox(1.8, 0.35, 0.06, benchMat, x + 2, 0.62, z - 0.22));
+        cityGroup.add(makeBox(0.06, 0.45, 0.06, getCachedMat('bench_leg', () =>
+          new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.3 })),
+          x + 1.2, 0.23, z));
+        cityGroup.add(makeBox(0.06, 0.45, 0.06, getCachedMat('bench_leg', () =>
+          new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.3 })),
+          x + 2.8, 0.23, z));
+      }
+      // Waste bin (every 3rd)
+      if (furnitureCount % 3 === 0) {
+        cityGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.18, 0.7, 6), binMat));
+        cityGroup.children[cityGroup.children.length - 1].position.set(x - 1.5, 0.35, z);
+      }
+      furnitureCount++;
+    }
+  }
+
+  // === PALM TREES along main streets ===
+  for (let z = cityZStart - 20; z > cityZEnd + 20; z -= 30) {
+    for (const x of [cityXMin + 10, cityXMax - 10]) {
+      createPalmTree(scene, x, z, 7 + Math.random() * 4);
     }
   }
 
