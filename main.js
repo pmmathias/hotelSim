@@ -1289,6 +1289,141 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
   }
 }
 
+// =============================================================================
+// KUMKÖY CITY – Streets, Shops, Restaurants, Neon Lights
+// =============================================================================
+function createCity(scene) {
+  const cityZStart = -95; // just north of the hotel road
+  const cityZEnd = -230;
+  const cityXMin = -200, cityXMax = 200;
+  const blockSize = 40; // each city block is 40x40m
+  const streetW = 8; // street width
+
+  // Materials (cached, shared)
+  const roadMat2 = getCachedMat('city_road', () => new THREE.MeshStandardMaterial({
+    color: 0x333333, roughness: 0.9,
+    polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3,
+  }));
+  const sidewalkMat2 = getCachedMat('city_sidewalk', () => new THREE.MeshStandardMaterial({
+    color: 0xbbbbaa, roughness: 0.8,
+    polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
+  }));
+  const shopWallMat = getCachedMat('shop_wall', () => new THREE.MeshStandardMaterial({
+    color: 0xf0e8d8, roughness: 0.85,
+  }));
+  const shopRoofMat = getCachedMat('shop_roof', () => new THREE.MeshStandardMaterial({
+    color: 0xcc6633, roughness: 0.8,
+  }));
+
+  // City chunk group (for culling)
+  const cityGroup = new THREE.Group();
+
+  // Cross streets (north-south)
+  for (let x = cityXMin; x <= cityXMax; x += blockSize + streetW) {
+    const road = makePlane(streetW, Math.abs(cityZEnd - cityZStart), roadMat2,
+      x, 0.06, (cityZStart + cityZEnd) / 2);
+    cityGroup.add(road);
+  }
+
+  // Parallel streets (east-west)
+  for (let z = cityZStart - streetW; z >= cityZEnd; z -= blockSize + streetW) {
+    const road = makePlane(cityXMax - cityXMin, streetW, roadMat2,
+      0, 0.06, z);
+    cityGroup.add(road);
+    // Sidewalks on both sides
+    cityGroup.add(makePlane(cityXMax - cityXMin, 2, sidewalkMat2, 0, 0.08, z - streetW / 2 - 1));
+    cityGroup.add(makePlane(cityXMax - cityXMin, 2, sidewalkMat2, 0, 0.08, z + streetW / 2 + 1));
+  }
+
+  // Shop buildings in each city block
+  const shopColors = [0xf5e8d0, 0xe0d0b8, 0xd8ccc0, 0xf0e0c8, 0xe8d8c0];
+  const neonColors = [0xff4488, 0x44ff88, 0x4488ff, 0xffaa00, 0xff44ff, 0x44ffff];
+  const shopNames = ['CAFE', 'BAR', 'SHOP', 'MARKET', 'KEBAB', 'JEWELS', 'CARPET', 'SPICE'];
+
+  let shopCount = 0;
+  for (let bx = cityXMin + streetW; bx < cityXMax - blockSize; bx += blockSize + streetW) {
+    for (let bz = cityZStart - streetW - 2; bz > cityZEnd + blockSize; bz -= blockSize + streetW) {
+      // 2-4 shops per block edge (south side facing the street)
+      const shopsOnEdge = 2 + Math.floor(Math.random() * 3);
+      const shopW = (blockSize - 4) / shopsOnEdge;
+
+      for (let si = 0; si < shopsOnEdge; si++) {
+        const sx = bx + 2 + si * shopW + shopW / 2;
+        const sz = bz - 1;
+        const sH = 4 + Math.random() * 3; // 4-7m tall
+        const sD = 6 + Math.random() * 4; // 6-10m deep
+        const color = shopColors[shopCount % shopColors.length];
+
+        // Shop walls
+        const wallMat = getCachedMat('shop_' + (shopCount % 5), () =>
+          new THREE.MeshStandardMaterial({ color, roughness: 0.85 }));
+        const shop = makeBox(shopW - 1, sH, sD, wallMat, sx, sH / 2, sz - sD / 2);
+        shop.castShadow = true; shop.receiveShadow = true;
+        cityGroup.add(shop);
+
+        // Flat roof
+        cityGroup.add(makeBox(shopW, 0.2, sD + 0.5, shopRoofMat, sx, sH + 0.1, sz - sD / 2));
+
+        // Shop sign (neon, emissive)
+        const neonColor = neonColors[shopCount % neonColors.length];
+        const signMat3 = new THREE.MeshStandardMaterial({
+          color: neonColor, emissive: neonColor, emissiveIntensity: 0.3, roughness: 0.2,
+        });
+        cityGroup.add(makeBox(shopW - 2, 0.8, 0.1, signMat3, sx, sH - 0.5, sz + 0.1));
+
+        // At night, these signs will glow (registered as LED strips)
+        ledStrips.push({ meshes: [cityGroup.children[cityGroup.children.length - 1]],
+          mat: signMat3, phase: shopCount * 0.3, style: 'neon' });
+
+        // Awning/canopy over shop front
+        const awningMat = getCachedMat('awning_' + (shopCount % 3), () =>
+          new THREE.MeshStandardMaterial({
+            color: [0xcc3333, 0x3333cc, 0x33cc33][shopCount % 3], roughness: 0.8, side: THREE.DoubleSide,
+          }));
+        cityGroup.add(makeBox(shopW - 0.5, 0.08, 1.5, awningMat, sx, 3.2, sz + 0.8));
+
+        // Collider
+        addCollider(sx, sz - sD / 2, shopW - 1, sD);
+
+        shopCount++;
+      }
+
+      // Buildings on north side of block too
+      for (let si = 0; si < 2; si++) {
+        const sx = bx + 5 + si * (blockSize / 2 - 3);
+        const sz = bz - blockSize + 1;
+        const sH = 5 + Math.random() * 4;
+        const sD = 8;
+        const color = shopColors[(shopCount + 2) % shopColors.length];
+        const wallMat = getCachedMat('shop_' + ((shopCount + 2) % 5), () =>
+          new THREE.MeshStandardMaterial({ color, roughness: 0.85 }));
+        cityGroup.add(makeBox(blockSize / 2 - 4, sH, sD, wallMat, sx, sH / 2, sz + sD / 2));
+        cityGroup.add(makeBox(blockSize / 2 - 3, 0.2, sD + 0.5, shopRoofMat, sx, sH + 0.1, sz + sD / 2));
+        addCollider(sx, sz + sD / 2, blockSize / 2 - 4, sD);
+        shopCount++;
+      }
+    }
+  }
+
+  // Street lamps along city streets
+  const cityLampMat = getCachedMat('lamp', () => new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.4 }));
+  const cityBulbMat = getCachedMat('bulb', () => new THREE.MeshStandardMaterial({
+    color: 0xffffcc, emissive: 0xffffaa, emissiveIntensity: 0.8 }));
+  for (let z = cityZStart - 15; z > cityZEnd; z -= 25) {
+    for (let x = cityXMin + 20; x < cityXMax; x += 50) {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 5, 4), cityLampMat);
+      pole.position.set(x, 2.5, z);
+      cityGroup.add(pole);
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.3, 4, 4), cityBulbMat);
+      bulb.position.set(x, 5.1, z);
+      cityGroup.add(bulb);
+    }
+  }
+
+  scene.add(cityGroup);
+  registerSpatial(cityGroup);
+}
+
 // === OLD createLobbyInterior (kept for reference, no longer called) ===
 function _old_createLobbyInterior(group, width, depth, floorH, name) {
   const groupX = group.position ? 0 : 0; // local coords within group
@@ -2515,20 +2650,20 @@ function getTerrainY(x, z) {
 
   if (flatness >= 0.999) return 0;
 
-  // Hills ONLY on the north side of the road (z < -90)
-  // South side (hotels, pools, beach) is completely flat
-  if (z > -90) return 0;
+  // City area (z > -250) is completely flat for streets + buildings
+  // Hills only at world edges (z < -250)
+  if (z > -250) return 0;
 
-  // Smooth transition from flat (z=-90) to hilly (z=-120)
-  const hillFade = smoothClamp((-90 - z) / 30);
+  // Smooth transition from flat city to hills
+  const hillFade = smoothClamp((-250 - z) / 50);
 
-  // Rolling hills using FBM noise
+  // Rolling hills at the far edges
   const hillHeight = terrainFbm(x * 0.003, z * 0.003, 4) * 45
                    + terrainFbm(x * 0.01, z * 0.01, 3) * 15
                    + terrainFbm(x * 0.025, z * 0.025, 2) * 5;
 
-  // Mountains rise further north
-  const northBoost = z < -150 ? smoothClamp((-150 - z) / 100) * 50 : 0;
+  // Mountains at the very edge
+  const northBoost = z < -300 ? smoothClamp((-300 - z) / 100) * 50 : 0;
 
   const raw = (hillHeight + northBoost) * hillFade;
   const y = Math.max(0, raw) * (1 - flatness);
@@ -2757,9 +2892,9 @@ function buildScene(scene) {
   registerStairFloors(dwwX + 45, dwwZ - 30, 50, 22, 6.0);
   // DWW small boutique wing (2 floors, cozy premium rooms)
   // Position: inside DWW perimeter (x=35..175), clear of west hedge at x=35
-  // DWW Boutique: to the RIGHT side of DWW Main (not blocking entrance)
-  createHotelBuilding(scene, dwwX + 50, dwwZ - 30, 25, 16, 2, 'DWW Boutique Water', '#f5ede0', 0.8);
-  registerStairFloors(dwwX + 50, dwwZ - 30, 25, 16, 6.0);
+  // DWW Boutique: clearly separated to the right of DWW Main
+  createHotelBuilding(scene, dwwX + 65, dwwZ - 20, 25, 16, 2, 'DWW Boutique Water', '#f5ede0', 0.8);
+  registerStairFloors(dwwX + 65, dwwZ - 20, 25, 16, 6.0);
 
   const signMat = getCachedMat('sign', () => new THREE.MeshStandardMaterial({
     color: 0x1155aa, emissive: 0x1155aa, emissiveIntensity: 0.5, roughness: 0.3 }));
@@ -2793,9 +2928,9 @@ function buildScene(scene) {
   createHotelBuilding(scene, dfwX + 45, dfwZ - 25, 35, 15, 3, 'Qum Village', '#f2ebe0', 1.5);
   registerStairFloors(dfwX + 45, dfwZ - 25, 35, 15, 6.0);
   // DFW small boutique wing (2 floors, premium rooms)
-  // DFW Boutique: to the LEFT side of DFW Main (not blocking entrance)
-  createHotelBuilding(scene, dfwX - 50, dfwZ - 30, 25, 16, 2, 'DFW Boutique Fun', '#f0e8d8', 2.0);
-  registerStairFloors(dfwX - 50, dfwZ - 30, 25, 16, 6.0);
+  // DFW Boutique: clearly separated to the left of DFW Main
+  createHotelBuilding(scene, dfwX - 65, dfwZ - 20, 25, 16, 2, 'DFW Boutique Fun', '#f0e8d8', 2.0);
+  registerStairFloors(dfwX - 65, dfwZ - 20, 25, 16, 6.0);
 
   createPool(scene, dfwX + 10, dfwZ + 20, 55, 28);
   createPool(scene, dfwX - 30, dfwZ + 25, 12, 8);
@@ -2993,6 +3128,9 @@ function buildScene(scene) {
     bulb.position.set(lx, 5.1, -88);
     scene.add(bulb);
   }
+
+  // ===== KUMKÖY CITY (north of road) =====
+  createCity(scene);
 
   // ===== LIGHTING =====
   sunLight = new THREE.DirectionalLight(0xfff5e0, 2.0);
@@ -3606,7 +3744,14 @@ function animate() {
         strip.mat.emissiveIntensity = strobe;
         strip.mat.color.copy(_tmpColor);
       } else {
-        // Multi-color: each strip gets its OWN hue based on phase (multiple colors visible simultaneously)
+        if (strip.style === 'neon') {
+          // City neon signs: blink on/off + color pulse
+          const blink = Math.sin(elapsedTime * 3 + strip.phase * 5) > -0.3 ? 1 : 0.1;
+          const intensity = 4.0 * blink;
+          strip.mat.emissiveIntensity = intensity;
+          continue;
+        }
+        // Multi-color: each strip gets its OWN hue based on phase
         const hue = (elapsedTime * 0.08 + strip.phase * 0.7) % 1.0;
         _tmpColor.setHSL(hue, 1.0, 0.45);
         const intensity = 63.0 + Math.sin(elapsedTime * 2.5 + strip.phase * 6) * 26.0;
