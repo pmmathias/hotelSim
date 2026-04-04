@@ -648,6 +648,72 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
     group.add(makeBox(0.5, 0.3, 0.02, screenMat, rX + mx, 1.45, rZ - 0.22));
   }
 
+  // === BAR / LOUNGE (east side, south of reception) ===
+  const barX = W / 2 - 15;
+  const barZ = 2;
+  // Bar counter (L-shape: long + short arm)
+  const barCounterMat = getCachedMat('bar_counter', () => new THREE.MeshStandardMaterial({
+    color: 0x1a1a2a, roughness: 0.15, metalness: 0.1, envMap, envMapIntensity: 0.4,
+  }));
+  const barTopMat2 = getCachedMat('bar_top', () => new THREE.MeshStandardMaterial({
+    color: 0x0a0a1a, roughness: 0.08, metalness: 0.15, envMap, envMapIntensity: 0.5,
+  }));
+  // Long arm
+  group.add(makeBox(7, 1.1, 0.8, barCounterMat, barX, 0.7, barZ));
+  group.add(makeBox(7.2, 0.06, 1.0, barTopMat2, barX, 1.27, barZ));
+  // Short arm (perpendicular)
+  group.add(makeBox(0.8, 1.1, 3, barCounterMat, barX + 3.9, 0.7, barZ - 2));
+  group.add(makeBox(1.0, 0.06, 3.2, barTopMat2, barX + 3.9, 1.27, barZ - 2));
+
+  // 4 Bar stools
+  const stoolMat = getCachedMat('stool', () => new THREE.MeshStandardMaterial({
+    color: 0x444444, metalness: 0.4, roughness: 0.3,
+  }));
+  const stoolSeatMat = getCachedMat('stool_seat', () => new THREE.MeshStandardMaterial({
+    color: 0x3a2a1a, roughness: 0.7,
+  }));
+  for (let si = 0; si < 4; si++) {
+    const sx = barX - 2.5 + si * 1.8;
+    // Pole
+    group.add(makeBox(0.06, 0.75, 0.06, stoolMat, sx, 0.5, barZ + 0.8));
+    // Seat (cylinder)
+    const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.2, 0.08, 6), stoolSeatMat);
+    seat.position.set(sx, 0.88, barZ + 0.8);
+    group.add(seat);
+    // Footrest ring
+    group.add(makeBox(0.25, 0.03, 0.25, stoolMat, sx, 0.3, barZ + 0.8));
+  }
+
+  // Bottle shelf (behind bar, against east wall)
+  const shelfMat = getCachedMat('bar_shelf', () => new THREE.MeshStandardMaterial({
+    color: 0x2a1a0a, roughness: 0.5,
+  }));
+  // Shelf back panel
+  group.add(makeBox(7, 2.5, 0.15, shelfMat, barX, 1.8, barZ - 0.7));
+  // 3 shelf boards
+  for (let sh = 0; sh < 3; sh++) {
+    group.add(makeBox(6.5, 0.08, 0.35, shelfMat, barX, 1.0 + sh * 0.7, barZ - 0.5));
+  }
+  // Bottles (colored boxes on shelves)
+  const bottleColors = [0x1a5a1a, 0x8a4a1a, 0xaa8822, 0x2a2a6a, 0x6a1a1a, 0xccaa00];
+  for (let sh = 0; sh < 3; sh++) {
+    for (let bi = 0; bi < 5; bi++) {
+      const bx = barX - 2.5 + bi * 1.3;
+      const by = 1.1 + sh * 0.7;
+      const col = bottleColors[(sh * 5 + bi) % bottleColors.length];
+      group.add(makeBox(0.15, 0.4, 0.15, new THREE.MeshStandardMaterial({
+        color: col, roughness: 0.3, metalness: 0.1,
+      }), bx, by, barZ - 0.45));
+    }
+  }
+
+  // Bar warm light
+  const barLight = new THREE.PointLight(0xffddaa, 8, 15);
+  barLight.position.set(barX, H - 1.5, barZ);
+  barLight._dayIntensity = 8;
+  group.add(barLight);
+  lobbyLights.push(barLight);
+
   // === RESTAURANT (south section) ===
   const restaurantZ = D / 2 - 6;
   const restW = W - 12;
