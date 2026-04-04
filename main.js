@@ -648,6 +648,65 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
     group.add(makeBox(0.5, 0.3, 0.02, screenMat, rX + mx, 1.45, rZ - 0.22));
   }
 
+  // === TOILETS (west side, south of lift) ===
+  const wcX = -W / 2 + 5;
+  const wcZ = 0;
+  // Tile floor
+  const tileMat = getCachedMat('wc_tiles', () => new THREE.MeshStandardMaterial({
+    color: 0xd8d0c8, roughness: 0.25,
+    polygonOffset: true, polygonOffsetFactor: -12, polygonOffsetUnits: -12,
+  }));
+  group.add(makePlane(7, 5, tileMat, wcX, 0.35, wcZ));
+
+  // 3 toilet stalls along west wall
+  const toiletMat = getCachedMat('toilet_white', () => new THREE.MeshStandardMaterial({
+    color: 0xf0f0f0, roughness: 0.3,
+  }));
+  const stallWallMat = getCachedMat('stall_wall', () => new THREE.MeshStandardMaterial({
+    color: 0xcccccc, roughness: 0.6,
+  }));
+  for (let si = 0; si < 3; si++) {
+    const sz = wcZ - 2 + si * 2;
+    // Stall partition wall
+    if (si > 0) {
+      group.add(makeBox(1.8, 1.8, 0.08, stallWallMat, wcX - 1, 1.1, sz - 1));
+    }
+    // Toilet bowl (procedural: base box + seat + tank)
+    const tx = wcX - 1.5;
+    group.add(makeBox(0.45, 0.38, 0.55, toiletMat, tx, 0.34, sz));     // bowl
+    group.add(makeBox(0.4, 0.5, 0.2, toiletMat, tx, 0.4, sz - 0.35));  // tank
+    group.add(makeBox(0.42, 0.04, 0.4, toiletMat, tx, 0.55, sz + 0.05)); // seat
+    // Flush handle
+    group.add(makeBox(0.08, 0.12, 0.04, getCachedMat('chrome', () => new THREE.MeshStandardMaterial({
+      color: 0xcccccc, metalness: 0.8, roughness: 0.1,
+    })), tx + 0.22, 0.55, sz - 0.3));
+  }
+
+  // 2 sinks along east wall of WC
+  for (let si = 0; si < 2; si++) {
+    const sz = wcZ - 1 + si * 2;
+    const sx = wcX + 2;
+    // Sink basin
+    group.add(makeBox(0.6, 0.1, 0.45, toiletMat, sx, 0.85, sz));
+    // Pedestal
+    group.add(makeBox(0.15, 0.85, 0.15, toiletMat, sx, 0.43, sz));
+    // Faucet
+    group.add(makeBox(0.06, 0.2, 0.06, getCachedMat('chrome', () => new THREE.MeshStandardMaterial({
+      color: 0xcccccc, metalness: 0.8, roughness: 0.1,
+    })), sx, 1.0, sz - 0.15));
+    // Mirror
+    group.add(makeBox(0.5, 0.7, 0.04, getCachedMat('mirror', () => new THREE.MeshStandardMaterial({
+      color: 0xaabbcc, roughness: 0.02, metalness: 0.8, envMap, envMapIntensity: 1.0,
+    })), sx, 1.5, sz - 0.35));
+  }
+
+  // WC light
+  const wcLight = new THREE.PointLight(0xffffff, 6, 12);
+  wcLight.position.set(wcX, H - 1.5, wcZ);
+  wcLight._dayIntensity = 6;
+  group.add(wcLight);
+  lobbyLights.push(wcLight);
+
   // === BAR / LOUNGE (east side, south of reception) ===
   const barX = W / 2 - 15;
   const barZ = 2;
