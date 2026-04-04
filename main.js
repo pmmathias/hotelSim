@@ -1234,8 +1234,32 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
       color: 0xffeecc, emissive: 0xffddaa, emissiveIntensity: 0.6 })),
       rx + 1.4, y + 0.8, rz + roomD / 2 - 2.5));
 
-    // Window (south wall, glass)
-    group.add(makeBox(1.8, 1.4, 0.08, glassMat2, rx, y + 1.8, rz + roomD / 2 - 0.1));
+    // Balcony door (glass, slides open when player approaches)
+    addAutoDoor(group, rx, y, rz + roomD / 2 - 0.1, 2.0, 2.2, 'x', 2.3,
+      _currentBuildingX, _currentBuildingZ);
+    // Fixed glass panel above door
+    group.add(makeBox(2.0, 0.8, 0.08, glassMat2, rx, y + 2.6, rz + roomD / 2 - 0.1));
+
+    // Balcony furniture (small table + chair + plant)
+    const balcZ = rz + roomD / 2 + 0.5; // just outside on balcony
+    // Small table
+    group.add(makeBox(0.6, 0.04, 0.6, getCachedMat('balc_table', () => new THREE.MeshStandardMaterial({
+      color: 0xaaaaaa, roughness: 0.4, metalness: 0.3 })),
+      rx - 0.5, y + 0.72, balcZ));
+    group.add(makeBox(0.04, 0.7, 0.04, getCachedMat('table_legs', () => new THREE.MeshStandardMaterial({
+      color: 0x444444, metalness: 0.4 })),
+      rx - 0.5, y + 0.36, balcZ));
+    // Chair
+    group.add(makeBox(0.45, 0.04, 0.45, getCachedMat('balc_chair', () => new THREE.MeshStandardMaterial({
+      color: 0x888888, roughness: 0.5 })),
+      rx + 0.5, y + 0.45, balcZ));
+    // Small potted plant
+    const bpotMat = getCachedMat('pot', () => new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.7 }));
+    const bplantMat = getCachedMat('plant', () => new THREE.MeshStandardMaterial({ color: 0x2a7a2a, roughness: 0.8 }));
+    group.add(new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.12, 0.3, 5), bpotMat));
+    group.children[group.children.length - 1].position.set(rx - 0.5, y + 0.9, balcZ);
+    group.add(new THREE.Mesh(new THREE.SphereGeometry(0.25, 5, 5), bplantMat));
+    group.children[group.children.length - 1].position.set(rx - 0.5, y + 1.2, balcZ);
 
     // Room ceiling light
     group.add(makeBox(1.2, 0.04, 1.2, ceilPanelMat, rx, y + H - 0.12, rz));
@@ -3481,8 +3505,17 @@ function animate() {
   // Lift physics (every frame for smooth movement)
   updateLifts(camera, dt);
 
-  // Animated LED screens (every 4th frame)
+  // LED screens: animate at night, dark at day
   if (frameCount % 4 === 0 && window.__screenCanvases) {
+    if (!isNightMode) {
+      // Day: screens off (dark grey)
+      for (const sc of window.__screenCanvases) {
+        const ctx = sc.canvas.getContext('2d');
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillRect(0, 0, sc.canvas.width, sc.canvas.height);
+        sc.tex.needsUpdate = true;
+      }
+    } else {
     for (const sc of window.__screenCanvases) {
       const ctx = sc.canvas.getContext('2d');
       const w = sc.canvas.width, h = sc.canvas.height;
@@ -3512,24 +3545,36 @@ function animate() {
 
       sc.tex.needsUpdate = true;
     }
+    } // end night block
   }
 
-  // Floor culling: only render the floor the player is on (+ adjacent for stairs)
+  // Visible-driven floor culling: render interiors when they COULD be seen
   if (frameCount % 5 === 0) {
     const py = camera.position.y;
     const px = camera.position.x;
     const pz = camera.position.z;
     for (const fg of floorGroups) {
-      // Check if player is in this building
-      const inBuilding = Math.abs(px - fg.buildingX) < 60 && Math.abs(pz - fg.buildingZ) < 20;
-      if (!inBuilding) {
+      const dx = Math.abs(px - fg.buildingX);
+      const dz = Math.abs(pz - fg.buildingZ);
+      const inBuilding = dx < 60 && dz < 20;
+      const nearBuilding = dx < 80 && dz < 40; // close enough to see through windows/glass
+
+      if (!nearBuilding) {
         fg.group.visible = false;
         continue;
       }
-      // Show current floor + adjacent (for stairs/lift transition)
-      const playerFloor = Math.max(0, Math.floor((py - PLAYER_HEIGHT + 1) / 6));
-      const floorDist = Math.abs(fg.floorNum - playerFloor);
-      fg.group.visible = floorDist <= 1; // current + 1 above/below
+
+      if (inBuilding) {
+        // Inside: show current floor + adjacent
+        const playerFloor = Math.max(0, Math.floor((py - PLAYER_HEIGHT + 1) / 6));
+        const floorDist = Math.abs(fg.floorNum - playerFloor);
+        fg.group.visible = floorDist <= 1;
+      } else {
+        // Outside but near: show EG (visible through glass doors/windows)
+        // Upper floors only visible if player Y is near that floor (balcony level)
+        const playerFloor = Math.max(0, Math.floor((py - PLAYER_HEIGHT + 1) / 6));
+        fg.group.visible = fg.floorNum === 0 || Math.abs(fg.floorNum - playerFloor) <= 1;
+      }
     }
   }
 
