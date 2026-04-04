@@ -648,6 +648,56 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
     group.add(makeBox(0.5, 0.3, 0.02, screenMat, rX + mx, 1.45, rZ - 0.22));
   }
 
+  // === RESTAURANT (south section) ===
+  const restaurantZ = D / 2 - 6;
+  const restW = W - 12;
+  // Restaurant floor (warm tile, different from lobby marble)
+  const restFloorMat = getCachedMat('rest_floor', () => new THREE.MeshStandardMaterial({
+    map: textures.concrete, color: 0xc8b8a0, roughness: 0.6,
+    polygonOffset: true, polygonOffsetFactor: -12, polygonOffsetUnits: -12,
+  }));
+  group.add(makePlane(restW, 11, restFloorMat, 0, 0.35, restZ));
+
+  // Buffet counter (center island)
+  const buffetMat = getCachedMat('buffet', () => new THREE.MeshStandardMaterial({
+    color: 0x888888, metalness: 0.3, roughness: 0.4,
+  }));
+  group.add(makeBox(18, 0.9, 1.2, buffetMat, 0, 0.6, restaurantZ - 2));
+  group.add(makeBox(18.2, 0.05, 1.4, getCachedMat('buffet_top', () => new THREE.MeshStandardMaterial({
+    color: 0xdddddd, roughness: 0.2, metalness: 0.1 })), 0, 1.07, restaurantZ - 2));
+  // Food display domes
+  const domeMat = getCachedMat('food_dome', () => new THREE.MeshStandardMaterial({
+    color: 0xaaddff, transparent: true, opacity: 0.2, roughness: 0.05 }));
+  const foodColors = [0xcc8844, 0x88cc44, 0xcc4444, 0xddaa22, 0x44aa88];
+  for (let fi = 0; fi < 5; fi++) {
+    const fx = -7 + fi * 3.5;
+    group.add(makeBox(1.5, 0.6, 0.8, domeMat, fx, 1.4, restaurantZ - 2));
+    group.add(makeBox(1.2, 0.2, 0.5, new THREE.MeshStandardMaterial({ color: foodColors[fi], roughness: 0.8 }),
+      fx, 1.2, restaurantZ - 2));
+  }
+
+  // Dining tables (2 rows x 4 columns)
+  const tableMat2 = getCachedMat('dining_table', () => new THREE.MeshStandardMaterial({
+    map: textures.woodOak, roughness: 0.35 }));
+  const chairMat2 = getCachedMat('dining_chair', () => new THREE.MeshStandardMaterial({
+    color: 0x5a4a3a, roughness: 0.7 }));
+  const tlegMat = getCachedMat('table_legs', () => new THREE.MeshStandardMaterial({
+    color: 0x444444, metalness: 0.4, roughness: 0.3 }));
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 4; col++) {
+      const tx = -restW / 2 + 12 + col * (restW - 20) / 3;
+      const tz = restaurantZ + 1 + row * 4;
+      group.add(makeBox(2.0, 0.06, 1.2, tableMat2, tx, 0.78, tz));
+      group.add(makeBox(0.1, 0.75, 0.1, tlegMat, tx, 0.4, tz));
+      // 2 chairs per table (simplified for performance)
+      for (const side of [-1.2, 1.2]) {
+        group.add(makeBox(0.45, 0.04, 0.45, chairMat2, tx + side, 0.48, tz));
+        group.add(makeBox(0.45, 0.4, 0.05, chairMat2, tx + side, 0.7, tz + (side < 0 ? -0.2 : 0.2)));
+        group.add(makeBox(0.04, 0.46, 0.04, tlegMat, tx + side, 0.24, tz));
+      }
+    }
+  }
+
   // === HOTEL LOGO (south back wall) ===
   group.add(makeBox(8, 2.5, 0.12, accentMat, 0, 2.5, D / 2 - 0.35));
   group.add(makeBox(7, 1.5, 0.05, new THREE.MeshStandardMaterial({
