@@ -1344,25 +1344,27 @@ function createCity(scene) {
     color: 0xffeedd, emissive: 0xffddbb, emissiveIntensity: 0.5, roughness: 0.9,
   }));
 
-  // === STREETS ===
+  // === STREETS (use thin BoxGeometry to avoid z-fighting with ground plane) ===
   for (let x = cityXMin; x <= cityXMax; x += blockSize + streetW) {
-    cityGroup.add(makePlane(streetW, Math.abs(cityZEnd - cityZStart), roadMat2, x, 0.06, (cityZStart + cityZEnd) / 2));
+    const r = makeBox(streetW, 0.12, Math.abs(cityZEnd - cityZStart), roadMat2, x, 0.06, (cityZStart + cityZEnd) / 2);
+    r.receiveShadow = true; cityGroup.add(r);
   }
   for (let z = cityZStart - streetW; z >= cityZEnd; z -= blockSize + streetW) {
-    cityGroup.add(makePlane(cityXMax - cityXMin, streetW, roadMat2, 0, 0.06, z));
-    // Sidewalks (textured concrete)
+    const r = makeBox(cityXMax - cityXMin, 0.12, streetW, roadMat2, 0, 0.06, z);
+    r.receiveShadow = true; cityGroup.add(r);
+    // Sidewalks (raised boxes, no z-fighting)
     for (const side of [-1, 1]) {
-      cityGroup.add(makePlane(cityXMax - cityXMin, 2.5, sidewalkMat2, 0, 0.09, z + side * (streetW / 2 + 1.25)));
-      // Curb edge (raised strip)
-      cityGroup.add(makeBox(cityXMax - cityXMin, 0.15, 0.2, curbMat, 0, 0.12, z + side * streetW / 2));
+      const sw = makeBox(cityXMax - cityXMin, 0.15, 2.5, sidewalkMat2, 0, 0.1, z + side * (streetW / 2 + 1.25));
+      sw.receiveShadow = true; cityGroup.add(sw);
+      // Curb edge
+      cityGroup.add(makeBox(cityXMax - cityXMin, 0.2, 0.2, curbMat, 0, 0.17, z + side * streetW / 2));
     }
-    // Zebra crossings at intersections
+    // Zebra crossings (on top of road boxes)
     for (let cx = cityXMin; cx <= cityXMax; cx += blockSize + streetW) {
       for (let stripe = -3; stripe <= 3; stripe++) {
-        cityGroup.add(makePlane(1.2, 0.5, getCachedMat('zebra', () => new THREE.MeshStandardMaterial({
+        cityGroup.add(makeBox(1.2, 0.02, 0.5, getCachedMat('zebra', () => new THREE.MeshStandardMaterial({
           color: 0xeeeeee, roughness: 0.8,
-          polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5,
-        })), cx, 0.08, z + stripe * 1));
+        })), cx, 0.13, z + stripe * 1));
       }
     }
   }
