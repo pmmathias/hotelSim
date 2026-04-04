@@ -264,19 +264,17 @@ function makePBR(key, opts) {
 }
 
 function getGlassMat() {
-  return getCachedMat('glass', () => new THREE.MeshPhysicalMaterial({
-    color: 0x99bbdd, transparent: true, opacity: 0.15,
-    transmission: 0.9, thickness: 0.5, ior: 1.5,
-    roughness: 0.02, metalness: 0.0,
-    envMap, envMapIntensity: 0.8,
+  return getCachedMat('glass', () => new THREE.MeshStandardMaterial({
+    color: 0x99bbdd, transparent: true, opacity: 0.2,
+    roughness: 0.02, metalness: 0.1,
+    envMap, envMapIntensity: 0.7,
   }));
 }
 
 function getMarbleMat() {
-  return getCachedMat('marble', () => new THREE.MeshPhysicalMaterial({
-    map: textures.marble, roughness: 0.15, metalness: 0.0,
-    clearcoat: 0.6, clearcoatRoughness: 0.15,
-    envMap, envMapIntensity: 0.5,
+  return getCachedMat('marble', () => new THREE.MeshStandardMaterial({
+    map: textures.marble, roughness: 0.15, metalness: 0.05,
+    envMap, envMapIntensity: 0.4,
   }));
 }
 
@@ -646,8 +644,8 @@ function createHotelInterior(group, width, depth, floorH, name) {
   const ceilMat = getCachedMat('ceiling', () => new THREE.MeshStandardMaterial({
     color: 0xf5f0e8, roughness: 0.9, side: THREE.DoubleSide,
   }));
-  const woodMat = getCachedMat('desk_wood', () => new THREE.MeshPhysicalMaterial({
-    map: textures.woodWalnut, roughness: 0.3, clearcoat: 0.4, clearcoatRoughness: 0.3,
+  const woodMat = getCachedMat('desk_wood', () => new THREE.MeshStandardMaterial({
+    map: textures.woodWalnut, roughness: 0.3, metalness: 0.02,
   }));
   const accentMat = getCachedMat('accent_' + accentColor, () => new THREE.MeshStandardMaterial({
     color: accentColor, emissive: accentColor, emissiveIntensity: 0.6, roughness: 0.2,
@@ -932,11 +930,7 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   }
   // Cabin ceiling light
   group.add(makeBox(1.5, 0.04, 1.5, ceilPanelMat, liftX, H - 0.1, liftZ));
-  const liftLight = new THREE.PointLight(0xffffff, 4, 8);
-  liftLight.position.set(liftX, H - 0.5, liftZ);
-  liftLight._dayIntensity = 4;
-  group.add(liftLight);
-  lobbyLights.push(liftLight);
+  // Lift uses emissive panel only (no extra PointLight for performance)
 
   // === TOILETS (west side, south of lift) ===
   const wcX = -W / 2 + 5;
@@ -994,11 +988,7 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   }
 
   // WC light
-  const wcLight = new THREE.PointLight(0xffffff, 6, 12);
-  wcLight.position.set(wcX, H - 1.5, wcZ);
-  wcLight._dayIntensity = 6;
-  group.add(wcLight);
-  lobbyLights.push(wcLight);
+  // WC uses emissive panel only (no extra PointLight for performance)
 
   // === BAR / LOUNGE (east side, south of reception) ===
   const barX = W / 2 - 15;
@@ -1060,11 +1050,7 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   }
 
   // Bar warm light
-  const barLight = new THREE.PointLight(0xffddaa, 8, 15);
-  barLight.position.set(barX, H - 1.5, barZ);
-  barLight._dayIntensity = 8;
-  group.add(barLight);
-  lobbyLights.push(barLight);
+  // Bar uses ceiling panel light from main lightPositions (no extra PointLight)
 
   // === RESTAURANT (south section) ===
   const restaurantZ = D / 2 - 6;
@@ -1123,12 +1109,11 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   }), 0, 2.5, D / 2 - 0.42));
 
   // === LIGHTING (pendant lights, always bright) ===
+  // Reduced to 3 PointLights (from 5+bar+wc+lift = 7) for performance
   const lightPositions = [
-    { x: -5, z: -D / 2 + 8, int: 3 },   // lobby front
-    { x: -5, z: 0, int: 2.5 },            // lobby center
-    { x: W / 2 - 15, z: -D / 2 + 6, int: 2 }, // reception
-    { x: W / 2 - 15, z: 5, int: 1.8 },    // bar area
-    { x: 0, z: D / 2 - 6, int: 2.5 },     // restaurant
+    { x: -5, z: -D / 2 + 8, int: 4 },    // lobby (covers front+center)
+    { x: W / 2 - 15, z: 0, int: 3 },      // reception+bar
+    { x: 0, z: D / 2 - 6, int: 3.5 },     // restaurant
   ];
   for (const lp of lightPositions) {
     const pl = new THREE.PointLight(0xfff0dd, lp.int * 10, 45);
@@ -1192,15 +1177,15 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
   }));
   group.add(makePlane(W - 16, hallD - 0.5, carpetMat, 0, y + 0.2, hallZ));
 
-  // Hallway ceiling lights
+  // Hallway: 3 emissive panels (visual) + 1 PointLight (performance)
   for (let hx = -W / 4; hx <= W / 4; hx += W / 4) {
     group.add(makeBox(2, 0.04, 1, ceilPanelMat, hx, y + H - 0.1, hallZ));
-    const hl = new THREE.PointLight(0xfff5e0, 5, 15);
-    hl.position.set(hx, y + H - 1.5, hallZ);
-    hl._dayIntensity = 5;
-    group.add(hl);
-    lobbyLights.push(hl);
   }
+  const hallLight = new THREE.PointLight(0xfff5e0, 8, 30);
+  hallLight.position.set(0, y + H - 1.5, hallZ);
+  hallLight._dayIntensity = 8;
+  group.add(hallLight);
+  lobbyLights.push(hallLight);
 
   // === 4 ROOMS (south side) ===
   const roomCount = 4;
@@ -2280,10 +2265,9 @@ function createAmphitheater(scene, x, z, rotation = 0, size = 'small') {
   const tiers = isLarge ? 9 : 5;
 
   // === STAGE PLATFORM (glossy black) ===
-  const stageMat = getCachedMat('stage_black', () => new THREE.MeshPhysicalMaterial({
-    color: 0x1a1a1a, roughness: 0.15, metalness: 0.1,
-    clearcoat: 0.8, clearcoatRoughness: 0.1,
-    envMap, envMapIntensity: 0.6,
+  const stageMat = getCachedMat('stage_black', () => new THREE.MeshStandardMaterial({
+    color: 0x1a1a1a, roughness: 0.15, metalness: 0.2,
+    envMap, envMapIntensity: 0.5,
   }));
   const stage = makeBox(stageW, stageH, stageD, stageMat, 0, stageH / 2, 0);
   stage.castShadow = true; stage.receiveShadow = true;
