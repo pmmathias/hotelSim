@@ -161,6 +161,7 @@ const spatialObjects = [];  // Now holds groups/LODs, not every single mesh
 const lodObjects = [];      // Cached LOD references (no traverse needed)
 const waterMeshes = [];
 const ledStrips = [];
+const autoDoors = [];     // { mesh, worldPos, openOffset, isOpen, t }
 const stageLights = [];
 let skyUniforms = null;
 let skyMesh = null;
@@ -456,6 +457,7 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
   }
 
   // Hotel interior (all 3 floors)
+  _currentBuildingX = x; _currentBuildingZ = z;
   createHotelInterior(hiGroup, width, depth, floorH, name);
 
   // === LOW-DETAIL (shown far) – single colored box ===
@@ -500,8 +502,62 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
 // Lobby interior – detailed with stairs, furniture, textures
 // ---------------------------------------------------------------------------
 // =============================================================================
+// AUTO-DOOR SYSTEM – doors slide open when player approaches
+// =============================================================================
+function addAutoDoor(group, x, y, z, w, h, slideAxis, slideAmount, buildingX, buildingZ) {
+  const doorMat = getCachedMat('auto_door', () => new THREE.MeshStandardMaterial({
+    map: textures.woodWalnut, roughness: 0.4, color: 0x6a5040,
+  }));
+  const door = makeBox(
+    slideAxis === 'x' ? 0.08 : w,
+    h,
+    slideAxis === 'z' ? 0.08 : w,
+    doorMat, x, y + h / 2, z
+  );
+  group.add(door);
+
+  autoDoors.push({
+    mesh: door,
+    // World position (building offset added later in animate loop)
+    localX: x, localZ: z,
+    buildingX, buildingZ,
+    slideAxis,
+    slideAmount,
+    isOpen: false,
+    t: 0, // animation progress 0=closed, 1=open
+    closedX: x, closedZ: z,
+  });
+}
+
+function updateAutoDoors(camX, camZ, dt) {
+  for (const d of autoDoors) {
+    const wx = d.buildingX + d.localX;
+    const wz = d.buildingZ + d.localZ;
+    const dist = Math.sqrt((camX - wx) ** 2 + (camZ - wz) ** 2);
+
+    const shouldOpen = dist < 3;
+    const shouldClose = dist > 4.5;
+
+    if (shouldOpen && !d.isOpen) d.isOpen = true;
+    if (shouldClose && d.isOpen) d.isOpen = false;
+
+    // Smooth animation
+    const target = d.isOpen ? 1 : 0;
+    d.t += (target - d.t) * Math.min(1, dt * 5); // lerp speed
+
+    if (d.slideAxis === 'x') {
+      d.mesh.position.x = d.closedX + d.t * d.slideAmount;
+    } else {
+      d.mesh.position.z = d.closedZ + d.t * d.slideAmount;
+    }
+  }
+}
+
+// =============================================================================
 // NEW HOTEL INTERIOR (Ticket 102+) – replaces old createLobbyInterior
 // =============================================================================
+let _currentBuildingX = 0, _currentBuildingZ = 0; // set by createHotelBuilding for door registration
+
 function createHotelInterior(group, width, depth, floorH, name) {
   const W = width, D = depth, H = floorH, T = 0.5;
   const isWater = name.includes('Water');
@@ -788,6 +844,9 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   // === TOILETS (west side, south of lift) ===
   const wcX = -W / 2 + 5;
   const wcZ = 0;
+  // Toilet door (slides open)
+  addAutoDoor(group, -W / 2 + 9, 0, -1, 1.2, 2.2, 'z', -1.5,
+    _currentBuildingX, _currentBuildingZ);
   // Tile floor
   const tileMat = getCachedMat('wc_tiles', () => new THREE.MeshStandardMaterial({
     color: 0xd8d0c8, roughness: 0.25,
@@ -1073,6 +1132,9 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
     // Door frame
     group.add(makeBox(0.08, doorH2, 0.2, doorFrameMat, rx - doorW2 / 2, y + doorH2 / 2, hallZ + hallD / 2));
     group.add(makeBox(0.08, doorH2, 0.2, doorFrameMat, rx + doorW2 / 2, y + doorH2 / 2, hallZ + hallD / 2));
+    // Auto-door (slides to the right when player approaches)
+    addAutoDoor(group, rx, y, hallZ + hallD / 2, doorW2, doorH2, 'x', doorW2 + 0.3,
+      _currentBuildingX, _currentBuildingZ);
 
     // Room laminate floor
     group.add(makePlane(roomW - 1, roomD - 1, laminateMat, rx, y + 0.2, rz));
@@ -3276,6 +3338,11 @@ function animate() {
     const w = waterMeshes[i];
     const isSea = (i === waterMeshes.length - 1);
     w.material.uniforms['time'].value += dt * (isSea ? 0.6 : 0.15);
+  }
+
+  // Auto-doors (check every 3rd frame for performance)
+  if (frameCount % 3 === 0) {
+    updateAutoDoors(camera.position.x, camera.position.z, dt * 3);
   }
 
   // LED strips: animated at night – BRIGHT!
