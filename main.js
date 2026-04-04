@@ -532,7 +532,10 @@ function createHotelInterior(group, width, depth, floorH, name) {
   // === STAIRCASE (east side, all 3 floors) ===
   createStaircase(group, W, D, H, marbleMat, damaskMat, ceilPanelMat);
 
-  // (1.OG and 2.OG will be added by Tickets 108/109)
+  // === 1. OG (y=H..2H) ===
+  createUpperFloor(group, W, D, H, 1, damaskMat, ceilMat, woodMat, ceilPanelMat, accentColor);
+  // === 2. OG (y=2H..3H) ===
+  createUpperFloor(group, W, D, H, 2, damaskMat, ceilMat, woodMat, ceilPanelMat, accentColor);
 }
 
 function createStaircase(group, W, D, H, marbleMat, damaskMat, ceilPanelMat) {
@@ -983,6 +986,138 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
     group.add(makeBox(0.03, 1.4, 0.03, getCachedMat('pendant_rod', () =>
       new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.5 })),
       lp.x, H - 0.75, lp.z));
+  }
+}
+
+// =============================================================================
+// UPPER FLOOR (1.OG or 2.OG) – Hallway + 4 Rooms with Bathrooms
+// =============================================================================
+function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat, ceilPanelMat, accentColor) {
+  const y = floorNum * H; // base Y of this floor
+  const stairX = W / 2 - 4; // staircase position (east)
+  const liftX2 = -W / 2 + 4; // lift position (west)
+
+  // Materials
+  const laminateMat = getCachedMat('laminate', () => new THREE.MeshStandardMaterial({
+    color: 0xc8a882, roughness: 0.45,
+    polygonOffset: true, polygonOffsetFactor: -12, polygonOffsetUnits: -12,
+  }));
+  const tileMat2 = getCachedMat('wc_tiles', () => new THREE.MeshStandardMaterial({
+    color: 0xd8d0c8, roughness: 0.25,
+    polygonOffset: true, polygonOffsetFactor: -12, polygonOffsetUnits: -12,
+  }));
+  const bedMat = getCachedMat('bedsheet', () => new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.9 }));
+  const bedFrameMat = getCachedMat('bedframe', () => new THREE.MeshStandardMaterial({ map: textures.woodOak, roughness: 0.4 }));
+  const nightMat = getCachedMat('nightstand', () => new THREE.MeshStandardMaterial({ map: textures.woodWalnut, roughness: 0.35 }));
+  const doorFrameMat = getCachedMat('doorframe', () => new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 0.4 }));
+  const toiletMat2 = getCachedMat('toilet_white', () => new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.3 }));
+  const chromeMat = getCachedMat('chrome', () => new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.1 }));
+  const mirrorMat3 = getCachedMat('mirror', () => new THREE.MeshStandardMaterial({ color: 0xaabbcc, roughness: 0.02, metalness: 0.8, envMap, envMapIntensity: 1.0 }));
+  const glassMat2 = getGlassMat();
+
+  // === FLOOR SLAB (with stairwell opening) ===
+  // Main slab (left of stairwell)
+  const slabLeftW = W - 10; // everything except stair+lift area
+  group.add(makeBox(slabLeftW, 0.3, D - 2, laminateMat, -2, y, 0));
+
+  // === CEILING ===
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W - 4, D - 2), ceilMat);
+  ceil.rotation.x = Math.PI / 2;
+  ceil.position.set(0, y + H - 0.05, 0);
+  group.add(ceil);
+
+  // === HALLWAY (north side, 3m wide) ===
+  const hallD = 3;
+  const hallZ = -D / 2 + 3 + hallD / 2; // 3m from north wall
+  // Carpet runner
+  const carpetMat = getCachedMat('carpet_hall', () => new THREE.MeshStandardMaterial({
+    color: accentColor, roughness: 0.95,
+    polygonOffset: true, polygonOffsetFactor: -14, polygonOffsetUnits: -14,
+  }));
+  group.add(makePlane(W - 16, hallD - 0.5, carpetMat, 0, y + 0.2, hallZ));
+
+  // Hallway ceiling lights
+  for (let hx = -W / 4; hx <= W / 4; hx += W / 4) {
+    group.add(makeBox(2, 0.04, 1, ceilPanelMat, hx, y + H - 0.1, hallZ));
+    const hl = new THREE.PointLight(0xfff5e0, 5, 15);
+    hl.position.set(hx, y + H - 1.5, hallZ);
+    hl._dayIntensity = 5;
+    group.add(hl);
+    lobbyLights.push(hl);
+  }
+
+  // === 4 ROOMS (south side) ===
+  const roomCount = 4;
+  const usableW = W - 16; // minus lift (8m) + stairs (8m)
+  const roomW = usableW / roomCount;
+  const roomD = D - hallD - 5; // depth from hallway to south wall
+  const roomStartX = -W / 2 + 8; // after lift shaft
+
+  for (let r = 0; r < roomCount; r++) {
+    const rx = roomStartX + r * roomW + roomW / 2;
+    const rz = hallZ + hallD / 2 + roomD / 2 + 0.5;
+    const doorW2 = 1.2;
+    const doorH2 = 2.2;
+    const wallH2 = H - 0.5;
+
+    // Room partition walls
+    if (r > 0) {
+      group.add(makeBox(0.15, wallH2, roomD + 1, damaskMat, rx - roomW / 2, y + wallH2 / 2, rz));
+    }
+
+    // North wall (hallway side) with door opening
+    const nwSegW = (roomW - doorW2) / 2 - 0.2;
+    group.add(makeBox(nwSegW, wallH2, 0.15, damaskMat, rx - roomW / 2 + nwSegW / 2 + 0.1, y + wallH2 / 2, hallZ + hallD / 2));
+    group.add(makeBox(nwSegW, wallH2, 0.15, damaskMat, rx + roomW / 2 - nwSegW / 2 - 0.1, y + wallH2 / 2, hallZ + hallD / 2));
+    group.add(makeBox(doorW2 + 0.2, wallH2 - doorH2, 0.15, damaskMat, rx, y + doorH2 + (wallH2 - doorH2) / 2, hallZ + hallD / 2));
+    // Door frame
+    group.add(makeBox(0.08, doorH2, 0.2, doorFrameMat, rx - doorW2 / 2, y + doorH2 / 2, hallZ + hallD / 2));
+    group.add(makeBox(0.08, doorH2, 0.2, doorFrameMat, rx + doorW2 / 2, y + doorH2 / 2, hallZ + hallD / 2));
+
+    // Room laminate floor
+    group.add(makePlane(roomW - 1, roomD - 1, laminateMat, rx, y + 0.2, rz));
+
+    // === BED ===
+    group.add(makeBox(2.2, 0.35, 2.0, bedFrameMat, rx, y + 0.32, rz + roomD / 2 - 2));
+    group.add(makeBox(2.0, 0.2, 1.8, bedMat, rx, y + 0.55, rz + roomD / 2 - 2));
+    group.add(makeBox(1.2, 0.12, 0.35, bedMat, rx, y + 0.72, rz + roomD / 2 - 2.8));
+    group.add(makeBox(2.2, 0.8, 0.1, bedFrameMat, rx, y + 0.85, rz + roomD / 2 - 2.9));
+
+    // Nightstand
+    group.add(makeBox(0.5, 0.5, 0.4, nightMat, rx + 1.4, y + 0.4, rz + roomD / 2 - 2.5));
+    // Lamp on nightstand
+    group.add(makeBox(0.15, 0.3, 0.15, getCachedMat('roomlamp', () => new THREE.MeshStandardMaterial({
+      color: 0xffeecc, emissive: 0xffddaa, emissiveIntensity: 0.6 })),
+      rx + 1.4, y + 0.8, rz + roomD / 2 - 2.5));
+
+    // Window (south wall, glass)
+    group.add(makeBox(1.8, 1.4, 0.08, glassMat2, rx, y + 1.8, rz + roomD / 2 - 0.1));
+
+    // Room ceiling light
+    group.add(makeBox(1.2, 0.04, 1.2, ceilPanelMat, rx, y + H - 0.12, rz));
+
+    // === BATHROOM (northwest corner of each room) ===
+    const bathW2 = 3.5, bathD2 = 3.5;
+    const bathX = rx - roomW / 2 + bathW2 / 2 + 0.5;
+    const bathZ2 = rz - roomD / 2 + bathD2 / 2 + 0.5;
+
+    // Bathroom partition wall
+    group.add(makeBox(0.12, wallH2, bathD2, damaskMat, bathX + bathW2 / 2, y + wallH2 / 2, bathZ2));
+    group.add(makeBox(bathW2, wallH2, 0.12, damaskMat, bathX, y + wallH2 / 2, bathZ2 + bathD2 / 2));
+
+    // Bathroom tile floor
+    group.add(makePlane(bathW2 - 0.3, bathD2 - 0.3, tileMat2, bathX, y + 0.22, bathZ2));
+
+    // Toilet
+    group.add(makeBox(0.45, 0.38, 0.55, toiletMat2, bathX - 0.8, y + 0.34, bathZ2 - 0.5));
+    group.add(makeBox(0.4, 0.5, 0.2, toiletMat2, bathX - 0.8, y + 0.4, bathZ2 - 0.85));
+    group.add(makeBox(0.42, 0.04, 0.4, toiletMat2, bathX - 0.8, y + 0.55, bathZ2 - 0.45));
+
+    // Sink + mirror
+    group.add(makeBox(0.6, 0.1, 0.45, toiletMat2, bathX + 0.5, y + 0.85, bathZ2 - 0.8));
+    group.add(makeBox(0.15, 0.85, 0.15, toiletMat2, bathX + 0.5, y + 0.43, bathZ2 - 0.8));
+    group.add(makeBox(0.06, 0.2, 0.06, chromeMat, bathX + 0.5, y + 1.0, bathZ2 - 0.95));
+    group.add(makeBox(0.5, 0.65, 0.04, mirrorMat3, bathX + 0.5, y + 1.5, bathZ2 - 0.97));
   }
 }
 
