@@ -2418,7 +2418,7 @@ function createAmphitheater(scene, x, z, rotation = 0, size = 'small') {
       const r = (innerR + outerR) / 2;
       dummy.position.set(
         Math.cos(angle) * r,
-        0.3 + tier * 0.5 + 0.3,
+        0.3 + tier * 0.5 + 0.05, // sit directly on the tier surface (0.05m above ring)
         stageD / 2 + 2 + tier * tierSpacing + Math.sin(angle) * r * 0.05
       );
       dummy.rotation.y = angle + Math.PI / 2;
@@ -2434,6 +2434,8 @@ function createAmphitheater(scene, x, z, rotation = 0, size = 'small') {
   // Stage: jumpable collider + walkable floor on top
   addCollider(x, z, stageW, stageD, stageH);
   addFloor(x, z, stageW + 2, stageD + 2, stageH);
+  // Backdrop wall collider (prevents walking through the screen)
+  addCollider(x, z - stageD / 2, stageW, 0.5);
   // No seat collider – player can walk freely between seats and jump on stage
   // (seat collider removed – was blocking access to stage area)
 }
