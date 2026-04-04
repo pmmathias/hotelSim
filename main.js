@@ -1293,8 +1293,12 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
 // KUMKÖY CITY – Streets, Shops, Restaurants, Neon Lights
 // =============================================================================
 function createCity(scene) {
+  // City forms a RING around the hotels
+  // North: z=-95 to z=-230 (shopping street)
+  // East: x=160 to x=250 (east wing)
+  // West: x=-160 to x=-250 (west wing)
   const cityZStart = -95, cityZEnd = -230;
-  const cityXMin = -200, cityXMax = 200;
+  const cityXMin = -250, cityXMax = 250;
   const blockSize = 40, streetW = 8;
   const cityGroup = new THREE.Group();
 
@@ -1492,6 +1496,38 @@ function createCity(scene) {
         cityGroup.children[cityGroup.children.length - 1].position.set(x - 1.5, 0.35, z);
       }
       furnitureCount++;
+    }
+  }
+
+  // === EAST + WEST WINGS (shops along hotel sides) ===
+  for (const sideX of [-1, 1]) {
+    const wingX = sideX * 180; // east or west wing
+    // Road running north-south along hotel side
+    cityGroup.add(makeBox(streetW, 0.12, 200, roadMat2, wingX, 0.06, -60));
+    cityGroup.add(makeBox(2.5, 0.15, 200, sidewalkMat2, wingX - streetW / 2 - 1.5, 0.1, -60));
+    cityGroup.add(makeBox(2.5, 0.15, 200, sidewalkMat2, wingX + streetW / 2 + 1.5, 0.1, -60));
+
+    // 6 shops along each side
+    for (let si = 0; si < 6; si++) {
+      const sz = -160 + si * 28;
+      const sH = 4 + Math.random() * 3;
+      const sW = 12, sD = 8;
+      const shopSide = sideX > 0 ? 1 : -1;
+      const shopX = wingX + shopSide * (streetW / 2 + sD / 2 + 2);
+      const facadeMat2 = facadeMats[si % 5];
+
+      cityGroup.add(makeBox(sW, sH, sD, facadeMat2, shopX, sH / 2, sz));
+      cityGroup.add(makeBox(sW + 1, 0.2, sD + 0.5, shopRoofMat, shopX, sH + 0.1, sz));
+      // Schaufenster
+      cityGroup.add(makeBox(sW - 3, 2.0, 0.08, glassMat3, shopX - shopSide * (sD / 2 - 0.1), 1.8, sz));
+      cityGroup.add(makeBox(sW - 3.5, 1.8, 0.04, interiorGlowMat, shopX - shopSide * (sD / 2 - 0.2), 1.8, sz));
+      // Neon sign
+      const nc = neonColors[(shopCount + si) % neonColors.length];
+      const nsm = new THREE.MeshStandardMaterial({ color: nc, emissive: nc, emissiveIntensity: 0.3, roughness: 0.2 });
+      cityGroup.add(makeBox(sW - 2, 0.6, 0.08, nsm, shopX - shopSide * (sD / 2 - 0.1), sH - 0.4, sz));
+      ledStrips.push({ meshes: [cityGroup.children[cityGroup.children.length - 1]], mat: nsm, phase: si * 0.5, style: 'neon' });
+
+      addCollider(shopX, sz, sW, sD);
     }
   }
 
@@ -3628,6 +3664,8 @@ function init() {
   }
   function setNightMode() {
     isNightMode = true;
+    // Rotate screen pattern each time night is activated
+    window.__screenPattern = (window.__screenPattern || 0) + 1;
     sunLight.intensity = 2.0;           // SAME as day (keeps interiors identical)
     ambientLight.intensity = 0.5;       // SAME as day
     ambientLight.color.set(0x88aacc);  // SAME as day
@@ -3736,33 +3774,90 @@ function animate() {
         sc.tex.needsUpdate = true;
       }
     } else {
+    // Night: rotating patterns (changes each time night mode is activated)
+    if (!window.__screenPattern) window.__screenPattern = 0;
     for (const sc of window.__screenCanvases) {
       const ctx = sc.canvas.getContext('2d');
       const w = sc.canvas.width, h = sc.canvas.height;
       const t = elapsedTime;
+      const pattern = window.__screenPattern % 8;
 
-      // Background: dark gradient
-      const grad = ctx.createLinearGradient(0, 0, w, 0);
-      const hue1 = (t * 0.05) % 1, hue2 = (t * 0.05 + 0.3) % 1;
-      ctx.fillStyle = `hsl(${hue1 * 360}, 80%, 15%)`;
+      // Dark background
+      ctx.fillStyle = '#0a0a15';
       ctx.fillRect(0, 0, w, h);
 
-      // Scrolling text
-      ctx.font = 'bold 48px sans-serif';
-      ctx.fillStyle = `hsl(${hue2 * 360}, 100%, 60%)`;
-      const text = sc.isLarge ? 'DREAM FUN WORLD' : 'DREAM WATER WORLD';
-      const scrollX = ((t * 80) % (w + 600)) - 300;
-      ctx.fillText(text, w - scrollX, h / 2 + 16);
-
-      // Wave pattern below text
-      ctx.strokeStyle = `hsl(${((hue1 + 0.5) % 1) * 360}, 90%, 50%)`;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      for (let x = 0; x < w; x += 4) {
-        ctx.lineTo(x, h - 15 + Math.sin(x * 0.03 + t * 3) * 10);
+      switch (pattern) {
+        case 0: // Scrolling hotel name
+          ctx.font = 'bold 48px sans-serif';
+          ctx.fillStyle = `hsl(${(t * 20) % 360}, 100%, 60%)`;
+          const text0 = sc.isLarge ? 'DREAM FUN WORLD' : 'DREAM WATER WORLD';
+          ctx.fillText(text0, w - ((t * 80) % (w + 600)) + 300, h / 2 + 16);
+          break;
+        case 1: // Stars pattern
+          for (let i = 0; i < 30; i++) {
+            const sx = (i * 137.5 + t * 20) % w;
+            const sy = (i * 89.3 + Math.sin(t + i) * 15) % h;
+            const sr = 2 + Math.sin(t * 3 + i) * 2;
+            ctx.fillStyle = `hsl(${(i * 40 + t * 50) % 360}, 100%, 70%)`;
+            ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill();
+          }
+          break;
+        case 2: // Water waves
+          for (let y = 0; y < h; y += 4) {
+            const hue = (y / h * 180 + t * 30) % 360;
+            ctx.strokeStyle = `hsl(${hue}, 80%, ${30 + Math.sin(y * 0.1 + t * 2) * 20}%)`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            for (let x = 0; x < w; x += 3) ctx.lineTo(x, y + Math.sin(x * 0.02 + t * 2 + y * 0.05) * 8);
+            ctx.stroke();
+          }
+          break;
+        case 3: // Color blocks (checkerboard)
+          const bs = 32;
+          for (let by = 0; by < h; by += bs) {
+            for (let bx2 = 0; bx2 < w; bx2 += bs) {
+              ctx.fillStyle = `hsl(${(bx2 + by + t * 60) % 360}, 90%, 45%)`;
+              ctx.fillRect(bx2, by, bs - 2, bs - 2);
+            }
+          }
+          break;
+        case 4: // Fire effect
+          for (let x = 0; x < w; x += 4) {
+            const fh = (Math.sin(x * 0.05 + t * 5) * 0.5 + 0.5) * h * 0.7;
+            const grad = ctx.createLinearGradient(x, h, x, h - fh);
+            grad.addColorStop(0, '#ff4400'); grad.addColorStop(0.5, '#ffaa00'); grad.addColorStop(1, '#ffff44');
+            ctx.fillStyle = grad; ctx.fillRect(x, h - fh, 4, fh);
+          }
+          break;
+        case 5: // Big "WELCOME" text
+          ctx.font = 'bold 64px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = `hsl(${(t * 40) % 360}, 100%, 60%)`;
+          ctx.fillText('WELCOME', w / 2, h / 2 + 20);
+          ctx.textAlign = 'left';
+          break;
+        case 6: // Spinning spiral
+          ctx.translate(w / 2, h / 2);
+          for (let i = 0; i < 12; i++) {
+            const a = (i / 12) * Math.PI * 2 + t * 2;
+            ctx.fillStyle = `hsl(${i * 30 + t * 50}, 100%, 50%)`;
+            ctx.fillRect(Math.cos(a) * 40, Math.sin(a) * 30, 20, 10);
+          }
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          break;
+        case 7: // Rainbow gradient sweep
+          const rg = ctx.createLinearGradient(0, 0, w, 0);
+          for (let s = 0; s <= 1; s += 0.1) {
+            rg.addColorStop(s, `hsl(${(s * 360 + t * 60) % 360}, 100%, 50%)`);
+          }
+          ctx.fillStyle = rg; ctx.fillRect(0, 0, w, h);
+          ctx.font = 'bold 40px sans-serif';
+          ctx.fillStyle = '#000';
+          ctx.textAlign = 'center';
+          ctx.fillText(sc.isLarge ? 'FUN WORLD' : 'WATER WORLD', w / 2, h / 2 + 14);
+          ctx.textAlign = 'left';
+          break;
       }
-      ctx.stroke();
-
       sc.tex.needsUpdate = true;
     }
     } // end night block
