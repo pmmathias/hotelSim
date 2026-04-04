@@ -529,7 +529,72 @@ function createHotelInterior(group, width, depth, floorH, name) {
   // === ERDGESCHOSS (y=0..H) ===
   createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woodMat, accentMat, ceilPanelMat, isWater);
 
+  // === STAIRCASE (east side, all 3 floors) ===
+  createStaircase(group, W, D, H, marbleMat, damaskMat, ceilPanelMat);
+
   // (1.OG and 2.OG will be added by Tickets 108/109)
+}
+
+function createStaircase(group, W, D, H, marbleMat, damaskMat, ceilPanelMat) {
+  const stairX = W / 2 - 4;   // against east wall
+  const stairW = 3.5;
+  const stairD = 10;
+  const stairStartZ = -D / 2 + 4;
+
+  const stairMat = getCachedMat('stair_marble', () => new THREE.MeshStandardMaterial({
+    map: textures.lobbyFloor, roughness: 0.3, envMap, envMapIntensity: 0.2,
+  }));
+  const railMat = getCachedMat('railing', () => new THREE.MeshStandardMaterial({
+    color: 0xcccccc, metalness: 0.6, roughness: 0.2,
+  }));
+
+  // Stairwell walls (enclosing the staircase, all 3 floors)
+  const swH = H * 3;
+  group.add(makeBox(0.15, swH, stairD + 2, damaskMat, stairX - stairW / 2 - 0.1, swH / 2, stairStartZ + stairD / 2));
+  group.add(makeBox(stairW + 0.5, swH, 0.15, damaskMat, stairX, swH / 2, stairStartZ + stairD + 1));
+  // North wall with door opening per floor
+  for (let fl = 0; fl < 3; fl++) {
+    const fy = fl * H;
+    // Above door
+    group.add(makeBox(stairW + 0.5, H - 2.5, 0.15, damaskMat, stairX, fy + 2.5 + (H - 2.5) / 2, stairStartZ - 0.5));
+  }
+
+  // Steps for all 3 flights (EG→1.OG, 1.OG→2.OG, 2.OG→roof-landing)
+  for (let flight = 0; flight < 2; flight++) {
+    const baseY = flight * H;
+    const stepsPerFlight = 20;
+    const stepH = H / stepsPerFlight;
+    const stepD = stairD / stepsPerFlight;
+
+    for (let s = 0; s < stepsPerFlight; s++) {
+      const sy = baseY + (s + 0.5) * stepH;
+      const sz = stairStartZ + s * stepD;
+      const step = makeBox(stairW, stepH, stepD, stairMat, stairX, sy, sz);
+      step.receiveShadow = true;
+      group.add(step);
+    }
+
+    // Railing (inner side, west)
+    const railLen = Math.sqrt(stairD * stairD + H * H);
+    const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, railLen, 4), railMat);
+    rail.position.set(stairX - stairW / 2 + 0.3, baseY + H / 2, stairStartZ + stairD / 2);
+    rail.rotation.x = Math.atan2(H, stairD);
+    group.add(rail);
+
+    // Railing posts every 4 steps
+    for (let s = 0; s <= stepsPerFlight; s += 4) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1, 4), railMat);
+      post.position.set(stairX - stairW / 2 + 0.3, baseY + s * stepH + 0.5, stairStartZ + s * stepD);
+      group.add(post);
+    }
+
+    // Landing platform at top of each flight
+    const landingY = (flight + 1) * H;
+    group.add(makeBox(stairW + 1, 0.3, 3, stairMat, stairX, landingY, stairStartZ + stairD + 0.5));
+
+    // Light on each landing
+    group.add(makeBox(1.5, 0.04, 1, ceilPanelMat, stairX, landingY + H - 0.1, stairStartZ + stairD / 2));
+  }
 }
 
 function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woodMat, accentMat, ceilPanelMat, isWater) {
@@ -1497,28 +1562,31 @@ function createSecondFloor(group, width, depth, floorH, name) {
 
 // Register stair floors after building is placed in scene
 function registerStairFloors(x, z, width, depth, floorH) {
-  const stairW = 3;
-  const stairDepth = depth * 0.6;
-  const stairX = x + width / 2 - stairW - 1;
+  // New staircase: east side, 20 steps per flight, 2 flights (EG→1OG, 1OG→2OG)
+  const stairW = 3.5;
+  const stairD = 10;
+  const stairX = x + width / 2 - 4;
   const stairStartZ = z - depth / 2 + 4;
-  const stepCount = 16;
-  const stepH = floorH / stepCount;
-  const stepD = stairDepth / stepCount;
 
-  // Each stair step is a walkable floor at its height
-  for (let s = 0; s < stepCount; s++) {
-    addFloor(
-      stairX, stairStartZ + s * stepD,
-      stairW + 0.5, stepD + 0.2,
-      (s + 1) * stepH
-    );
+  for (let flight = 0; flight < 2; flight++) {
+    const baseY = flight * floorH;
+    const stepsPerFlight = 20;
+    const stepH = floorH / stepsPerFlight;
+    const stepD = stairD / stepsPerFlight;
+
+    // Register every 2nd step (performance)
+    for (let s = 0; s < stepsPerFlight; s += 2) {
+      addFloor(stairX, stairStartZ + s * stepD, stairW + 0.5, stepD * 2 + 0.3, baseY + (s + 2) * stepH);
+    }
+
+    // Landing at top of flight
+    addFloor(stairX, stairStartZ + stairD + 0.5, stairW + 2, 3, (flight + 1) * floorH);
   }
-  // Second floor: must match the visual floor slab from createSecondFloor exactly
-  // Visual floor: localZ = depth/4, localDepth = depth/2 - 2
-  // World: center at z + depth/4, depth = depth/2 - 2
-  const floor2VisualZ = z + depth / 4;
-  const floor2VisualDepth = depth / 2 - 2;
-  addFloor(x, floor2VisualZ, width - 2, floor2VisualDepth + 2, floorH); // +2 for overlap with stair top
+
+  // Floor slabs for 1.OG and 2.OG (full width except stairwell)
+  for (let fl = 1; fl <= 2; fl++) {
+    addFloor(x, z, width - 8, depth - 4, fl * floorH);
+  }
 }
 
 // ---------------------------------------------------------------------------
