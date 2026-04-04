@@ -2348,6 +2348,12 @@ function createAmphitheater(scene, x, z, rotation = 0, size = 'small') {
     color: 0x888888, metalness: 0.6, roughness: 0.2,
   }));
   const trussH = canopyH;
+  // Canopy/Roof (DoubleSide so visible from below)
+  const canopyMat2 = getCachedMat('stage_canopy', () => new THREE.MeshStandardMaterial({
+    color: 0x333333, roughness: 0.6, metalness: 0.2, side: THREE.DoubleSide,
+  }));
+  group.add(makeBox(stageW + 6, 0.25, stageD + 4, canopyMat2, 0, trussH + 0.1, 0));
+
   // Truss: 2 horizontal bars + 4 legs (simplified, no cross bars)
   for (const tz of [-stageD / 2 - 1, stageD / 2 + 1]) {
     group.add(makeBox(stageW + 4, 0.2, 0.2, trussMat, 0, trussH, tz));
@@ -2403,6 +2409,29 @@ function createAmphitheater(scene, x, z, rotation = 0, size = 'small') {
     tierMesh.position.set(0, 0.3 + tier * 0.5, stageD / 2 + 2 + tier * tierSpacing);
     tierMesh.receiveShadow = true;
     group.add(tierMesh);
+
+    // Chairs on this tier (InstancedMesh)
+    const chairsPerTier = Math.floor((outerR - innerR) > 1.5 ? (innerR * Math.PI) / 1.2 : 4);
+    const chairGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+    const chairInstMat = getCachedMat('stage_chair', () => new THREE.MeshStandardMaterial({
+      color: 0x4a3a2a, roughness: 0.7,
+    }));
+    const chairs = new THREE.InstancedMesh(chairGeo, chairInstMat, chairsPerTier);
+    const dummy = new THREE.Object3D();
+    for (let ci = 0; ci < chairsPerTier; ci++) {
+      const angle = (ci / chairsPerTier) * Math.PI; // semicircle
+      const r = (innerR + outerR) / 2;
+      dummy.position.set(
+        Math.cos(angle) * r,
+        0.3 + tier * 0.5 + 0.3,
+        stageD / 2 + 2 + tier * tierSpacing + Math.sin(angle) * r * 0.05
+      );
+      dummy.rotation.y = angle + Math.PI / 2;
+      dummy.updateMatrix();
+      chairs.setMatrixAt(ci, dummy.matrix);
+    }
+    chairs.instanceMatrix.needsUpdate = true;
+    group.add(chairs);
   }
 
   scene.add(group);
