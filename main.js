@@ -648,6 +648,75 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
     group.add(makeBox(0.5, 0.3, 0.02, screenMat, rX + mx, 1.45, rZ - 0.22));
   }
 
+  // === LIFT SHAFT (northwest corner, all 3 floors) ===
+  // liftX already defined above at line ~568
+  const liftZ = -D / 2 + 4;
+  const liftW = 3.5, liftD = 3.5;
+  const liftTotalH = H * 3; // spans all 3 floors
+  const liftMetalMat = getCachedMat('lift_metal', () => new THREE.MeshStandardMaterial({
+    color: 0x888888, metalness: 0.6, roughness: 0.2,
+  }));
+  const liftWallMat = getCachedMat('lift_wall', () => new THREE.MeshStandardMaterial({
+    color: 0xcccccc, roughness: 0.4, metalness: 0.2,
+  }));
+
+  // Shaft walls (full height, 3 floors)
+  // Back wall (west)
+  group.add(makeBox(0.15, liftTotalH, liftD, liftWallMat, liftX - liftW / 2, liftTotalH / 2, liftZ));
+  // Left wall (north)
+  group.add(makeBox(liftW, liftTotalH, 0.15, liftWallMat, liftX, liftTotalH / 2, liftZ - liftD / 2));
+  // Right wall (south)
+  group.add(makeBox(liftW, liftTotalH, 0.15, liftWallMat, liftX, liftTotalH / 2, liftZ + liftD / 2));
+  // Front (east) – metal frame with opening for door
+  group.add(makeBox(0.15, liftTotalH, (liftD - 2) / 2, liftMetalMat,
+    liftX + liftW / 2, liftTotalH / 2, liftZ - liftD / 2 + (liftD - 2) / 4));
+  group.add(makeBox(0.15, liftTotalH, (liftD - 2) / 2, liftMetalMat,
+    liftX + liftW / 2, liftTotalH / 2, liftZ + liftD / 2 - (liftD - 2) / 4));
+  // Lintel above door openings (per floor)
+  for (let fl = 0; fl < 3; fl++) {
+    group.add(makeBox(0.15, 0.5, 2, liftMetalMat,
+      liftX + liftW / 2, (fl + 1) * H - 0.25, liftZ));
+  }
+
+  // Lift door (at ground floor, will be animated by Ticket 111)
+  const liftDoorMat = getCachedMat('lift_door', () => new THREE.MeshStandardMaterial({
+    color: 0x999999, metalness: 0.7, roughness: 0.15,
+  }));
+  const liftDoorL = makeBox(0.06, H - 0.8, 1, liftDoorMat,
+    liftX + liftW / 2 + 0.05, H / 2 - 0.1, liftZ - 0.5);
+  const liftDoorR = makeBox(0.06, H - 0.8, 1, liftDoorMat,
+    liftX + liftW / 2 + 0.05, H / 2 - 0.1, liftZ + 0.5);
+  group.add(liftDoorL);
+  group.add(liftDoorR);
+
+  // Cabin interior: mirror on back wall, buttons, light
+  const mirrorMat2 = getCachedMat('mirror', () => new THREE.MeshStandardMaterial({
+    color: 0xaabbcc, roughness: 0.02, metalness: 0.8, envMap, envMapIntensity: 1.0,
+  }));
+  group.add(makeBox(liftW - 0.5, H - 1.5, 0.04, mirrorMat2,
+    liftX - liftW / 2 + 0.2, H / 2, liftZ)); // mirror on back wall
+  // Button panel
+  const btnPanelMat = getCachedMat('btn_panel', () => new THREE.MeshStandardMaterial({
+    color: 0x333333, roughness: 0.5, metalness: 0.3,
+  }));
+  group.add(makeBox(0.3, 0.6, 0.04, btnPanelMat,
+    liftX, 1.3, liftZ + liftD / 2 - 0.1));
+  // 3 floor buttons (small emissive dots)
+  const btnGlow = new THREE.MeshStandardMaterial({
+    color: 0x44ff44, emissive: 0x44ff44, emissiveIntensity: 0.8,
+  });
+  for (let bi = 0; bi < 3; bi++) {
+    group.add(makeBox(0.08, 0.08, 0.02, btnGlow,
+      liftX, 1.1 + bi * 0.15, liftZ + liftD / 2 - 0.08));
+  }
+  // Cabin ceiling light
+  group.add(makeBox(1.5, 0.04, 1.5, ceilPanelMat, liftX, H - 0.1, liftZ));
+  const liftLight = new THREE.PointLight(0xffffff, 4, 8);
+  liftLight.position.set(liftX, H - 0.5, liftZ);
+  liftLight._dayIntensity = 4;
+  group.add(liftLight);
+  lobbyLights.push(liftLight);
+
   // === TOILETS (west side, south of lift) ===
   const wcX = -W / 2 + 5;
   const wcZ = 0;
