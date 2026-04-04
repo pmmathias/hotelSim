@@ -162,6 +162,7 @@ const lodObjects = [];      // Cached LOD references (no traverse needed)
 const waterMeshes = [];
 const ledStrips = [];
 const autoDoors = [];     // { mesh, worldPos, openOffset, isOpen, t }
+const lifts = [];         // { buildingX, buildingZ, localX, localZ, w, d, currentFloor, state, timer, targetFloor, doorL, doorR }
 const stageLights = [];
 let skyUniforms = null;
 let skyMesh = null;
@@ -529,6 +530,75 @@ function addAutoDoor(group, x, y, z, w, h, slideAxis, slideAmount, buildingX, bu
   });
 }
 
+function updateLifts(cam, dt) {
+  for (const lift of lifts) {
+    const wx = lift.buildingX + lift.localX;
+    const wz = lift.buildingZ + lift.localZ;
+    const px = cam.position.x, pz = cam.position.z, py = cam.position.y;
+
+    // Check if player is inside lift shaft
+    const inLift = Math.abs(px - wx) < lift.w / 2 &&
+                   Math.abs(pz - wz) < lift.d / 2 &&
+                   py > lift.currentFloor * lift.H &&
+                   py < (lift.currentFloor + 1) * lift.H + 2;
+
+    switch (lift.state) {
+      case 'idle':
+        // Doors open, waiting for player to enter
+        lift.doorL.position.z = lift.doorClosedZL - 1; // open position
+        lift.doorR.position.z = lift.doorClosedZR + 1;
+        if (inLift) {
+          lift.state = 'closing';
+          lift.timer = 0;
+          // Pick next floor (cycle: 0→1→2→0)
+          lift.targetFloor = (lift.currentFloor + 1) % 3;
+        }
+        break;
+
+      case 'closing':
+        lift.timer += dt;
+        // Doors closing animation (1 second)
+        const closeT = Math.min(1, lift.timer / 1.0);
+        lift.doorL.position.z = lift.doorClosedZL - 1 + closeT * 1;
+        lift.doorR.position.z = lift.doorClosedZR + 1 - closeT * 1;
+        if (closeT >= 1) {
+          lift.state = 'moving';
+          lift.timer = 0;
+        }
+        break;
+
+      case 'moving':
+        lift.timer += dt;
+        // Move camera between floors (2 seconds)
+        const moveT = Math.min(1, lift.timer / 2.0);
+        const smoothT = moveT * moveT * (3 - 2 * moveT); // smoothstep
+        const fromY = lift.currentFloor * lift.H + PLAYER_HEIGHT;
+        const toY = lift.targetFloor * lift.H + PLAYER_HEIGHT;
+        if (inLift || Math.abs(px - wx) < lift.w) {
+          cam.position.y = fromY + (toY - fromY) * smoothT;
+        }
+        if (moveT >= 1) {
+          lift.currentFloor = lift.targetFloor;
+          lift.state = 'opening';
+          lift.timer = 0;
+        }
+        break;
+
+      case 'opening':
+        lift.timer += dt;
+        // Doors opening (1 second)
+        const openT = Math.min(1, lift.timer / 1.0);
+        lift.doorL.position.z = lift.doorClosedZL - openT * 1;
+        lift.doorR.position.z = lift.doorClosedZR + openT * 1;
+        if (openT >= 1) {
+          lift.state = 'idle';
+          lift.timer = 0;
+        }
+        break;
+    }
+  }
+}
+
 function updateAutoDoors(camX, camZ, dt) {
   for (const d of autoDoors) {
     const wx = d.buildingX + d.localX;
@@ -812,6 +882,19 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
     liftX + liftW / 2 + 0.05, H / 2 - 0.1, liftZ + 0.5);
   group.add(liftDoorL);
   group.add(liftDoorR);
+
+  // Register lift for physics
+  lifts.push({
+    buildingX: _currentBuildingX, buildingZ: _currentBuildingZ,
+    localX: liftX, localZ: liftZ,
+    w: liftW, d: liftD, H,
+    currentFloor: 0,
+    state: 'idle', // idle, closing, moving, opening
+    timer: 0,
+    targetFloor: 0,
+    doorL: liftDoorL, doorR: liftDoorR,
+    doorClosedZL: liftZ - 0.5, doorClosedZR: liftZ + 0.5,
+  });
 
   // Cabin interior: mirror on back wall, buttons, light
   const mirrorMat2 = getCachedMat('mirror', () => new THREE.MeshStandardMaterial({
@@ -3344,6 +3427,9 @@ function animate() {
   if (frameCount % 3 === 0) {
     updateAutoDoors(camera.position.x, camera.position.z, dt * 3);
   }
+
+  // Lift physics (every frame for smooth movement)
+  updateLifts(camera, dt);
 
   // LED strips: animated at night – BRIGHT!
   if (frameCount % 2 === 0 && isNightMode) {
