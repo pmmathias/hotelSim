@@ -2106,34 +2106,31 @@ function createAmphitheater(scene, x, z, rotation = 0, size = 'small') {
     stageLights.push({ light: spot, phase: i * 1.5 });
   });
 
-  // === SEATING TIERS (more rows, wider) ===
-  const seatMat = makePBR('seats', { color: 0x6a5a4a, roughness: 0.8 });
+  // === SEATING ROWS (flat on ground, semicircular) ===
+  const chairInstMat = getCachedMat('stage_chair', () => new THREE.MeshStandardMaterial({
+    color: 0x4a3a2a, roughness: 0.7,
+  }));
   const tierSpacing = isLarge ? 2.2 : 2.5;
   const firstR = isLarge ? 16 : 11;
   for (let tier = 0; tier < tiers; tier++) {
     const innerR = firstR + tier * tierSpacing;
     const outerR = innerR + (isLarge ? 1.8 : 2.0);
-    const tierMesh = new THREE.Mesh(new THREE.RingGeometry(innerR, outerR, 24, 1, 0, Math.PI), seatMat);
-    tierMesh.rotation.x = -Math.PI / 2;
-    tierMesh.position.set(0, 0.3 + tier * 0.5, stageD / 2 + 2 + tier * tierSpacing);
-    tierMesh.receiveShadow = true;
-    group.add(tierMesh);
+    const rowZ = stageD / 2 + 2 + tier * tierSpacing;
 
-    // Chairs on this tier (InstancedMesh)
-    const chairsPerTier = Math.floor((outerR - innerR) > 1.5 ? (innerR * Math.PI) / 1.2 : 4);
-    const chairGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-    const chairInstMat = getCachedMat('stage_chair', () => new THREE.MeshStandardMaterial({
-      color: 0x4a3a2a, roughness: 0.7,
-    }));
-    const chairs = new THREE.InstancedMesh(chairGeo, chairInstMat, chairsPerTier);
+    // Chairs on this row (InstancedMesh) — all sitting on ground (y=0)
+    const chairsPerTier = Math.max(4, Math.floor((innerR * Math.PI) / 1.2));
+    // Chair = seat (0.45×0.03×0.45) on 4 legs (0.03×0.45×0.03) + backrest (0.45×0.4×0.03)
+    // Using a simple box for the seat + thin box for backrest (2 meshes per instanced set)
+    const seatGeo = new THREE.BoxGeometry(0.45, 0.45, 0.45);
+    const chairs = new THREE.InstancedMesh(seatGeo, chairInstMat, chairsPerTier);
     const dummy = new THREE.Object3D();
     for (let ci = 0; ci < chairsPerTier; ci++) {
-      const angle = (ci / chairsPerTier) * Math.PI; // semicircle
+      const angle = (ci / chairsPerTier) * Math.PI;
       const r = (innerR + outerR) / 2;
       dummy.position.set(
         Math.cos(angle) * r,
-        0.3 + tier * 0.5 + 0.25, // chair bottom on tier (box center = half-height above surface)
-        stageD / 2 + 2 + tier * tierSpacing + Math.sin(angle) * r * 0.05
+        0.225,  // chair center at 0.225m (bottom at 0, top at 0.45m) — ON THE GROUND
+        rowZ + Math.sin(angle) * r * 0.05
       );
       dummy.rotation.y = angle + Math.PI / 2;
       dummy.updateMatrix();
