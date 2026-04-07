@@ -342,8 +342,9 @@ function createToilet(group, x, y, z, ceramicMat, chromeMat) {
 }
 
 // ── Detailed sink model (LatheGeometry basin + pedestal) ────────────────
-function createSink(group, x, y, z, ceramicMat, chromeMat, mirrorMat) {
-  // All positions offset by +0.3 so sink sits ON the floor surface
+function createSink(group, x, y, z, ceramicMat, chromeMat, mirrorMat, wallDir = 'z') {
+  // wallDir: 'z' = wall behind sink runs along X (mirror at z-offset)
+  //          'x' = wall behind sink runs along Z (mirror at x-offset)
   const fy = y + 0.3;
   // Basin: LatheGeometry
   const basinPts = [
@@ -374,25 +375,31 @@ function createSink(group, x, y, z, ceramicMat, chromeMat, mirrorMat) {
   base.position.set(x, fy + 0.02, z);
   group.add(base);
 
-  // Faucet
+  // Faucet + mirror orientation depends on wallDir
+  const wx = wallDir === 'x' ? -0.18 : 0;     // wall offset on X
+  const wz = wallDir === 'z' ? -0.18 : 0;     // wall offset on Z
   const pip = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.2, 6), chromeMat);
-  pip.position.set(x, fy + 1.0, z - 0.18);
+  pip.position.set(x + wx, fy + 1.0, z + wz);
   group.add(pip);
   const spout = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.015, 0.12, 6), chromeMat);
-  spout.position.set(x, fy + 1.05, z - 0.12);
-  spout.rotation.x = Math.PI / 3;
+  spout.position.set(x + wx * 0.67, fy + 1.05, z + wz * 0.67);
+  spout.rotation.x = wallDir === 'z' ? Math.PI / 3 : 0;
+  spout.rotation.z = wallDir === 'x' ? -Math.PI / 3 : 0;
   group.add(spout);
   // Handles
   for (const side of [-1, 1]) {
     const knob = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 6), chromeMat);
-    knob.position.set(x + side * 0.08, fy + 0.95, z - 0.18);
+    if (wallDir === 'z') knob.position.set(x + side * 0.08, fy + 0.95, z - 0.18);
+    else knob.position.set(x - 0.18, fy + 0.95, z + side * 0.08);
     group.add(knob);
   }
 
-  // Mirror
-  const mirror = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.7), mirrorMat);
-  mirror.position.set(x, fy + 1.5, z - 0.32);
-  group.add(mirror);
+  // Mirror on wall behind sink
+  if (wallDir === 'z') {
+    group.add(makeBox(0.5, 0.7, 0.03, mirrorMat, x, fy + 1.5, z - 0.32));
+  } else {
+    group.add(makeBox(0.03, 0.7, 0.5, mirrorMat, x - 0.32, fy + 1.5, z));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -911,10 +918,10 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   // Layout constants
   const liftW2 = 4, liftD2 = 4;                     // lift shaft area
   const stairArea = 5;                                // stairwell buffer
-  const sideW = 8;                                    // width reserved for lift/stair sides
+  const sideW = Math.min(8, W * 0.12);                // width reserved for lift/stair sides
   const lobbyD = D * 0.55;                            // lobby takes 55% of depth (north)
   const serviceD = D - lobbyD;                        // bar/restaurant (south)
-  const wcW = 8, wcD = 6;                             // WC dimensions
+  const wcW = Math.min(8, W * 0.15), wcD = Math.min(6, D * 0.25); // WC dimensions (scaled)
 
   // === FLOOR + CEILING ===
   const floorBox = makeBox(W - 1, 0.3, D - 1, marbleMat, 0, 0.15, 0);
@@ -985,7 +992,7 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   // Sinks
   for (let si = 0; si < 2; si++) {
     const sz = wcZ - 1 + si * 2;
-    createSink(group, wcX + 2, 0, sz, ceramicMat, chromeMat, wcMirrorMat);
+    createSink(group, wcX + 2, 0, sz, ceramicMat, chromeMat, wcMirrorMat, 'x');
   }
   // WC ceiling light
   group.add(makeBox(2, 0.04, 2, ceilPanelMat, wcX, H - 0.12, wcZ));
@@ -1045,8 +1052,9 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
 
   // Sofas (2 groups in lobby)
   const sofaMat = getCachedMat('sofa_lobby', () => new THREE.MeshStandardMaterial({ color: isWater ? 0x2a4a6a : 0x6a2a3a, roughness: 0.85 }));
+  const sofaSpread = Math.min(18, W / 2 - sideW - 3);
   for (const side of [-1, 1]) {
-    const sx = side * 18, sz = lobbyCenter;
+    const sx = side * sofaSpread, sz = lobbyCenter;
     group.add(makeBox(4, 0.4, 1.2, sofaMat, sx, 0.55, sz));
     group.add(makeBox(4, 0.5, 0.2, sofaMat, sx, 0.9, sz - 0.5));
     group.add(makeBox(0.2, 0.3, 1.2, sofaMat, sx - 1.9, 0.8, sz));
@@ -1063,7 +1071,8 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   // Plants
   const potMat = getCachedMat('pot', () => new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.7 }));
   const plantMat = getCachedMat('plant', () => new THREE.MeshStandardMaterial({ color: 0x2a7a2a, roughness: 0.8 }));
-  for (const [px, pz] of [[-30, -D / 2 + 3], [30, -D / 2 + 3], [-30, divZ - 1], [30, divZ - 1]]) {
+  const plantX = Math.min(30, W / 2 - 5);
+  for (const [px, pz] of [[-plantX, -D / 2 + 3], [plantX, -D / 2 + 3], [-plantX, divZ - 1], [plantX, divZ - 1]]) {
     group.add(new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.25, 0.6, 6), potMat));
     group.children[group.children.length - 1].position.set(px, 0.45, pz);
     group.add(new THREE.Mesh(new THREE.SphereGeometry(0.6, 6, 6), plantMat));
@@ -1088,8 +1097,9 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   group.add(makeBox(barW * 0.6, 1.1, 0.6, woodMat, barCenterX, 0.55, divZ + 2));
   group.add(makeBox(barW * 0.6 + 0.1, 0.05, 0.7, deskTopMat, barCenterX, 1.12, divZ + 2));
   // Bar stools
-  for (let i = 0; i < 5; i++) {
-    const sx2 = barCenterX - barW * 0.3 + i * (barW * 0.6) / 4;
+  const stoolCount = Math.max(2, Math.floor(barW / 4));
+  for (let i = 0; i < stoolCount; i++) {
+    const sx2 = barCenterX - barW * 0.3 + i * (barW * 0.6) / Math.max(1, stoolCount - 1);
     group.add(makeBox(0.35, 0.03, 0.35, getCachedMat('stool', () => new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 0.7 })), sx2, 0.7, divZ + 3));
     group.add(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.7, 6), getCachedMat('stool_leg', () => new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.5 }))));
     group.children[group.children.length - 1].position.set(sx2, 0.35, divZ + 3);
@@ -1098,10 +1108,12 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   // === RESTAURANT (south-east, tables) ===
   const tableMat = getCachedMat('table_rest', () => new THREE.MeshStandardMaterial({ map: textures.woodWalnut, roughness: 0.35 }));
   const restZCenter = divZ + serviceD / 2;
-  for (let row = 0; row < 3; row++) {
-    for (let col = 0; col < 4; col++) {
-      const tx = restCenterX - restW / 2 + 3 + col * (restW - 6) / 3;
-      const tz = restZCenter - serviceD / 2 + 3 + row * (serviceD - 4) / 2;
+  const tableRows = Math.max(1, Math.floor(serviceD / 5));
+  const tableCols = Math.max(1, Math.floor(restW / 5));
+  for (let row = 0; row < tableRows; row++) {
+    for (let col = 0; col < tableCols; col++) {
+      const tx = restCenterX - restW / 2 + 3 + col * (restW - 6) / Math.max(1, tableCols - 1 || 1);
+      const tz = restZCenter - serviceD / 2 + 3 + row * (serviceD - 4) / Math.max(1, tableRows - 1 || 1);
       group.add(makeBox(1.2, 0.04, 1.2, tableMat, tx, 0.75, tz));
       group.add(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 0.73, 6),
         getCachedMat('table_leg', () => new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.3 }))));
@@ -1154,12 +1166,12 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
   const ubx = _currentBuildingX, ubz = _currentBuildingZ;
 
   // Layout
-  const sideW = 8; // reserved for lift (west) and staircase (east)
+  const sideW = Math.min(8, W * 0.12); // reserved for lift/staircase (scaled for small buildings)
   const hallD2 = 3; // hallway depth
   const hallZ = 0;  // hallway centered in building
   const roomsW = W - sideW * 2; // usable width for rooms
-  const roomCount = 6; // per side
-  const roomW = roomsW / roomCount; // ~16.5m per room
+  const roomCount = Math.max(1, Math.floor(roomsW / 8)); // ~8m per room (realistic hotel room width)
+  const roomW = roomsW / roomCount;
   const roomDN = (D - hallD2) / 2 - 0.5; // north room depth
   const roomDS = (D - hallD2) / 2 - 0.5; // south room depth
   const roomStartX = -W / 2 + sideW;
