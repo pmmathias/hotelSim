@@ -1928,38 +1928,23 @@ const poolWaterMeshes = []; // custom shader fallback pools
 const waterMeshes2 = [];    // Water addon pools (planar reflection)
 
 function createPool(scene, x, z, w, d) {
-  const isLarge = (w * d >= 800) && _poolReflectCount < MAX_REFLECT_POOLS;
-
-  if (isLarge) {
-    // Large pools: Water addon with planar reflection (the ocean shader look)
-    _poolReflectCount++;
-    const waterSurface = new Water(new THREE.PlaneGeometry(w, d), {
-      textureWidth: 512,
-      textureHeight: 512,
-      waterNormals: getWaterNormals(),
-      sunDirection: new THREE.Vector3(0.5, 0.7, 0.4).normalize(),
-      sunColor: 0xffffff,
-      waterColor: 0x001e0f,
-      distortionScale: 2.5,
-      fog: false,
-      alpha: 0.9,
-    });
-    waterSurface.rotation.x = -Math.PI / 2;
-    waterSurface.position.set(x, 0.35, z);
-    scene.add(waterSurface);
-    waterMeshes2.push(waterSurface);
-    registerSpatial(waterSurface);
-  } else {
-    // Smaller pools: custom shader (no planar reflection, still looks good)
-    const mat = createPoolWaterMaterial();
-    const geo = new THREE.PlaneGeometry(w, d);
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.set(x, 0.35, z);
-    scene.add(mesh);
-    poolWaterMeshes.push(mesh);
-    registerSpatial(mesh);
-  }
+  // ALL pools use Water addon (same ocean shader look everywhere)
+  const waterSurface = new Water(new THREE.PlaneGeometry(w, d), {
+    textureWidth: 512,
+    textureHeight: 512,
+    waterNormals: getWaterNormals(),
+    sunDirection: new THREE.Vector3(0.5, 0.7, 0.4).normalize(),
+    sunColor: 0xffffff,
+    waterColor: 0x001e0f,
+    distortionScale: 2.5,
+    fog: false,
+    alpha: 0.9,
+  });
+  waterSurface.rotation.x = -Math.PI / 2;
+  waterSurface.position.set(x, 0.35, z);
+  scene.add(waterSurface);
+  waterMeshes2.push(waterSurface);
+  registerSpatial(waterSurface);
 
   // Pool floor (visible through water – light blue tiles)
   const poolFloorMat = getCachedMat('poolfloor', () => {
