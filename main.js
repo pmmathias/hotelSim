@@ -710,6 +710,16 @@ function updateLifts(cam, dt) {
         }
         break;
 
+      case 'waiting':
+        // Doors open, wait for player to LEAVE before accepting next trip
+        lift.doorL.position.z = lift.doorClosedZL - 1;
+        lift.doorR.position.z = lift.doorClosedZR + 1;
+        if (!inLift) {
+          // Player stepped out → ready for next trip
+          lift.state = 'idle';
+        }
+        break;
+
       case 'closing':
         lift.timer += dt;
         const closeT = Math.min(1, lift.timer / 1.0);
@@ -747,7 +757,7 @@ function updateLifts(cam, dt) {
         lift.doorL.position.z = lift.doorClosedZL - openT * 1;
         lift.doorR.position.z = lift.doorClosedZR + openT * 1;
         if (openT >= 1) {
-          lift.state = 'idle';
+          lift.state = 'waiting'; // wait for player to exit before next trip
           lift.timer = 0;
         }
         break;
