@@ -11,7 +11,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 // GTAOPass removed – too expensive (triples draw calls)
-// Water addon removed – custom pool shader used instead (no planar reflection cost)
+import { Water } from 'three/addons/objects/Water.js';
 // RectAreaLightUniformsLib removed – too expensive, using baked lightmap instead
 import {
   generateAllTextures,
@@ -1829,7 +1829,23 @@ function _genPoolNormal(seed) {
 function getPoolNormals() { if (!_poolNormTex1) _poolNormTex1 = _genPoolNormal(0); return _poolNormTex1; }
 function getPoolNormals2() { if (!_poolNormTex2) _poolNormTex2 = _genPoolNormal(7.3); return _poolNormTex2; }
 
-// Custom pool water ShaderMaterial
+// Loaded water normal map texture (much more organic than procedural sine waves)
+let _waterNormalsTex = null;
+function getWaterNormals() {
+  if (!_waterNormalsTex) {
+    _waterNormalsTex = new THREE.TextureLoader().load(
+      'https://raw.githubusercontent.com/mrdoob/three.js/r164/examples/textures/waternormals.jpg',
+      (tex) => { tex.wrapS = tex.wrapT = THREE.RepeatWrapping; }
+    );
+    _waterNormalsTex.wrapS = _waterNormalsTex.wrapT = THREE.RepeatWrapping;
+  }
+  return _waterNormalsTex;
+}
+
+let _poolReflectCount = 0;
+const MAX_REFLECT_POOLS = 2; // only 2 largest get expensive planar reflection
+
+// Custom shader fallback for smaller pools (no planar reflection)
 function createPoolWaterMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: {
@@ -1908,18 +1924,42 @@ function createPoolWaterMaterial() {
   });
 }
 
-const poolWaterMeshes = []; // custom shader pools (time uniform updated per frame)
+const poolWaterMeshes = []; // custom shader fallback pools
+const waterMeshes2 = [];    // Water addon pools (planar reflection)
 
 function createPool(scene, x, z, w, d) {
-  // All pools use custom shader (no planar reflection, zero extra cost)
-  const mat = createPoolWaterMaterial();
-  const geo = new THREE.PlaneGeometry(w, d);
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.position.set(x, 0.35, z);
-  scene.add(mesh);
-  poolWaterMeshes.push(mesh);
-  registerSpatial(mesh);
+  const isLarge = (w * d >= 800) && _poolReflectCount < MAX_REFLECT_POOLS;
+
+  if (isLarge) {
+    // Large pools: Water addon with planar reflection (the ocean shader look)
+    _poolReflectCount++;
+    const waterSurface = new Water(new THREE.PlaneGeometry(w, d), {
+      textureWidth: 512,
+      textureHeight: 512,
+      waterNormals: getWaterNormals(),
+      sunDirection: new THREE.Vector3(0.5, 0.7, 0.4).normalize(),
+      sunColor: 0xffffff,
+      waterColor: 0x001e0f,
+      distortionScale: 3.7,
+      fog: false,
+      alpha: 0.9,
+    });
+    waterSurface.rotation.x = -Math.PI / 2;
+    waterSurface.position.set(x, 0.35, z);
+    scene.add(waterSurface);
+    waterMeshes2.push(waterSurface);
+    registerSpatial(waterSurface);
+  } else {
+    // Smaller pools: custom shader (no planar reflection, still looks good)
+    const mat = createPoolWaterMaterial();
+    const geo = new THREE.PlaneGeometry(w, d);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(x, 0.35, z);
+    scene.add(mesh);
+    poolWaterMeshes.push(mesh);
+    registerSpatial(mesh);
+  }
 
   // Pool floor (visible through water – light blue tiles)
   const poolFloorMat = getCachedMat('poolfloor', () => {
@@ -3386,7 +3426,11 @@ function animate() {
     }
   }
 
-  // Pool water shader: just update uTime uniform (zero perf cost, no scene re-render)
+  // Water addon pools (planar reflection): update time
+  for (const w of waterMeshes2) {
+    w.material.uniforms['time'].value += 1.0 / 60.0;
+  }
+  // Custom shader pools (no reflection): update time
   for (const pm of poolWaterMeshes) {
     pm.material.uniforms.uTime.value = elapsedTime;
   }
