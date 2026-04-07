@@ -1463,8 +1463,8 @@ function createCity(scene) {
         }
 
         // Door → Auto-Door (slides in -Z when player approaches)
-        addAutoDoor(cityGroup, doorX, 0, sz, 1.0, 2.2, 'z', -1.5, 0, 0, {
-          triggerDist: 3, closeDist: 5, speed: 8,
+        addAutoDoor(cityGroup, doorX, 0, sz, 1.0, 2.2, 'x', -1.3, 0, 0, {
+          thinAxis: 'z', triggerDist: 3, closeDist: 5, speed: 8,
         });
 
         // Awning
@@ -1612,8 +1612,8 @@ function createCity(scene) {
       // Schaufenster glass
       cityGroup.add(makeBox(0.08, 2.0, sW - 3, glassMat3, faceX + faceSide * 0.05, 1.8, sz));
       // Door (auto-door, slides along Z)
-      addAutoDoor(cityGroup, faceX, 0, sz + sW / 2 - 1.5, 1.0, 2.2, 'z', -1.5, 0, 0, {
-        triggerDist: 3, closeDist: 5, speed: 8,
+      addAutoDoor(cityGroup, faceX, 0, sz + sW / 2 - 1.5, 1.0, 2.2, 'z', -1.3, 0, 0, {
+        thinAxis: 'x', triggerDist: 3, closeDist: 5, speed: 8,
       });
       // Neon sign
       const nc = neonColors[(shopCount + si) % neonColors.length];
