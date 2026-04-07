@@ -228,7 +228,7 @@ function makeBox(w, h, d, mat, x, y, z) {
   // This prevents textures from being stretched on large surfaces
   const uvAttr = geo.attributes.uv;
   if (uvAttr) {
-    const tileScale = 0.5; // 1 repeat per 2 meters
+    const tileScale = 1.0; // 1 repeat per 1 meter (denser tiling, less stretching)
     for (let i = 0; i < uvAttr.count; i++) {
       // BoxGeometry faces: determine which axis this face uses
       // by checking the normal (position in the buffer)
@@ -1197,7 +1197,7 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
     polygonOffset: true, polygonOffsetFactor: -12, polygonOffsetUnits: -12,
   }));
   const wallRoomMat = getCachedMat('wall_room', () => new THREE.MeshStandardMaterial({
-    color: 0xf0ebe0, roughness: 0.8,
+    map: textures.damask, color: 0xf0ebe0, roughness: 0.8,
   }));
   const doorFrameMat = getCachedMat('doorframe', () => new THREE.MeshStandardMaterial({
     map: textures.woodWalnut, roughness: 0.35, color: 0x8a7060,
