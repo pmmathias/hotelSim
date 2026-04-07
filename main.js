@@ -691,12 +691,12 @@ function updateLifts(cam, dt) {
     lift.doorL.position.y = doorY;
     lift.doorR.position.y = doorY;
 
-    // Check if player is inside lift shaft (generous Y range: ±3m from current floor)
+    // Check if player is inside lift shaft (very generous detection)
     const floorY = lift.currentFloor * lift.H;
-    const inLift = Math.abs(px - wx) < lift.w / 2 + 0.3 &&
-                   Math.abs(pz - wz) < lift.d / 2 + 0.3 &&
-                   py > floorY - 1 &&
-                   py < floorY + lift.H + 3;
+    const inLift = Math.abs(px - wx) < lift.w / 2 + 0.5 &&
+                   Math.abs(pz - wz) < lift.d / 2 + 0.5 &&
+                   py > floorY - 2 &&
+                   py < floorY + lift.H + 4;
 
     switch (lift.state) {
       case 'idle':
