@@ -642,8 +642,8 @@ function addAutoDoor(group, x, y, z, w, h, slideAxis, slideAmount, buildingX, bu
   const mat = opts.material || getCachedMat('auto_door', () => new THREE.MeshStandardMaterial({
     map: textures.woodWalnut, roughness: 0.4, color: 0x6a5040,
   }));
-  // thinAxis: which axis is the thin/flat dimension (default = slideAxis)
-  const thinAxis = opts.thinAxis || slideAxis;
+  // thinAxis: which axis is thin (perpendicular to wall). Default = opposite of slideAxis
+  const thinAxis = opts.thinAxis || (slideAxis === 'x' ? 'z' : 'x');
   const door = makeBox(
     thinAxis === 'x' ? 0.08 : w,
     h,
