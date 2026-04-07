@@ -1838,7 +1838,7 @@ function createPool(scene, x, z, w, d) {
     distortionScale: 1.0,   // visible wave distortion
     fog: false, alpha: 0.92,
   });
-  waterSurface.material.uniforms['size'].value = 0.15; // small = high frequency, many waves per m²
+  waterSurface.material.uniforms['size'].value = 0.003; // very short wavelength, fine pool ripples
   waterSurface.rotation.x = -Math.PI / 2;
   waterSurface.position.set(x, 0.35, z);
   scene.add(waterSurface);
