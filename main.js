@@ -1825,10 +1825,10 @@ function createPool(scene, x, z, w, d) {
     sunDirection: new THREE.Vector3(100, 120, 80).normalize(),
     sunColor: 0xffffff,
     waterColor: 0x006994,
-    distortionScale: 0.4,   // gentle distortion (was 1.5)
+    distortionScale: 1.0,   // visible wave distortion
     fog: false, alpha: 0.92,
   });
-  waterSurface.material.uniforms['size'].value = 0.8; // large wave scale = low frequency (was 0.2)
+  waterSurface.material.uniforms['size'].value = 0.15; // small = high frequency, many waves per m²
   waterSurface.rotation.x = -Math.PI / 2;
   waterSurface.position.set(x, 0.35, z);
   scene.add(waterSurface);
@@ -3304,7 +3304,7 @@ function animate() {
   for (let i = 0; i < waterMeshes.length; i++) {
     const w = waterMeshes[i];
     const isSea = (i === waterMeshes.length - 1);
-    w.material.uniforms['time'].value += dt * (isSea ? 0.6 : 0.04); // pools: very slow waves
+    w.material.uniforms['time'].value += dt * (isSea ? 0.6 : 0.3); // pools: lively ripple movement
   }
   // Animate normal map offset for env-mapped pools (subtle wave motion)
   if (frameCount % 2 === 0) {
