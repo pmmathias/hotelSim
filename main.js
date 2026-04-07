@@ -1940,7 +1940,7 @@ function createPool(scene, x, z, w, d) {
       sunDirection: new THREE.Vector3(0.5, 0.7, 0.4).normalize(),
       sunColor: 0xffffff,
       waterColor: 0x001e0f,
-      distortionScale: 3.7,
+      distortionScale: 2.5,
       fog: false,
       alpha: 0.9,
     });
@@ -3428,7 +3428,7 @@ function animate() {
 
   // Water addon pools (planar reflection): update time
   for (const w of waterMeshes2) {
-    w.material.uniforms['time'].value += 1.0 / 60.0;
+    w.material.uniforms['time'].value += 0.4 / 60.0; // pool-calm, not ocean-choppy
   }
   // Custom shader pools (no reflection): update time
   for (const pm of poolWaterMeshes) {
