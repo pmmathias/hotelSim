@@ -1428,43 +1428,48 @@ function createCity(scene) {
         const sD = 6 + Math.random() * 4;
         const facadeMat = facadeMats[shopCount % 5];
 
-        // Main building walls (4 sides, open at door)
+        // Main building walls (4 sides, door in FRONT next to schaufenster)
         const shopBodyW = shopW - 1;
         const shopCZ = sz - sD / 2; // center Z of shop interior
-        const doorX = sx + shopW / 2 - 1.5;
-        // Left wall
+        const doorW3 = 1.2; // door width
+        // Left wall (full)
         cityGroup.add(makeBox(0.3, sH, sD, facadeMat, sx - shopBodyW / 2, sH / 2, shopCZ));
-        // Right wall (split around door: lower portion + above door)
-        const doorSegD = sD - 2; // wall segment depth excluding door zone
-        cityGroup.add(makeBox(0.3, sH, doorSegD, facadeMat, sx + shopBodyW / 2, sH / 2, shopCZ - 1));
-        cityGroup.add(makeBox(0.3, sH - 2.4, 2, facadeMat, sx + shopBodyW / 2, 2.4 + (sH - 2.4) / 2, sz - 0.5));
-        // Back wall
+        // Right wall (full)
+        cityGroup.add(makeBox(0.3, sH, sD, facadeMat, sx + shopBodyW / 2, sH / 2, shopCZ));
+        // Back wall (full)
         cityGroup.add(makeBox(shopBodyW, sH, 0.3, facadeMat, sx, sH / 2, sz - sD + 0.15));
-        // Front wall (two segments around schaufenster)
-        const winW = shopW - 2.5;
-        const frontSegW = (shopBodyW - winW) / 2;
-        if (frontSegW > 0.2) {
-          cityGroup.add(makeBox(frontSegW, sH, 0.3, facadeMat, sx - shopBodyW / 2 + frontSegW / 2, sH / 2, sz));
-          cityGroup.add(makeBox(frontSegW, sH, 0.3, facadeMat, sx + shopBodyW / 2 - frontSegW / 2, sH / 2, sz));
+        // Front wall: [left segment] [door gap] [schaufenster gap] [right segment]
+        // Door on the right side of front, schaufenster on the left
+        const winW = shopBodyW * 0.55; // schaufenster = 55% of front
+        const doorSegW = shopBodyW - winW - doorW3 - 0.3; // remaining wall between door and window
+        // Right edge segment (small pillar next to right wall)
+        if (doorSegW > 0.3) {
+          cityGroup.add(makeBox(doorSegW / 2, sH, 0.3, facadeMat, sx + shopBodyW / 2 - doorSegW / 4, sH / 2, sz));
         }
-        // Front wall above window
-        cityGroup.add(makeBox(winW, sH - 2.8, 0.3, facadeMat, sx, 2.8 + (sH - 2.8) / 2, sz));
+        // Left edge segment (left of window)
+        cityGroup.add(makeBox(0.5, sH, 0.3, facadeMat, sx - shopBodyW / 2 + 0.25, sH / 2, sz));
+        // Above door
+        cityGroup.add(makeBox(doorW3 + 0.2, sH - 2.4, 0.3, facadeMat, sx + shopBodyW / 2 - doorW3 / 2 - (doorSegW > 0.3 ? doorSegW / 2 : 0) - 0.1, 2.4 + (sH - 2.4) / 2, sz));
+        // Above schaufenster
+        cityGroup.add(makeBox(winW, sH - 2.8, 0.3, facadeMat, sx - shopBodyW / 2 + 0.5 + winW / 2, 2.8 + (sH - 2.8) / 2, sz));
 
         // Dark sockel
         cityGroup.add(makeBox(shopW - 0.8, 0.8, 0.15, sockelMat, sx, 0.4, sz + 0.05));
         // Roof
         cityGroup.add(makeBox(shopW, 0.2, sD + 0.5, shopRoofMat, sx, sH + 0.1, shopCZ));
-        // Schaufenster glass
-        cityGroup.add(makeBox(winW, 2.0, 0.08, glassMat3, sx, 1.8, sz + 0.05));
+        // Schaufenster glass (left portion of front)
+        cityGroup.add(makeBox(winW, 2.0, 0.08, glassMat3, sx - shopBodyW / 2 + 0.5 + winW / 2, 1.8, sz + 0.05));
         // Upper floor windows
         if (sH > 5) {
           for (const wx of [-shopW / 4, shopW / 4])
             cityGroup.add(makeBox(1.2, 1.0, 0.06, glassMat3, sx + wx, sH - 1.5, sz + 0.05));
         }
 
-        // Door → Auto-Door (slides in -Z when player approaches)
-        addAutoDoor(cityGroup, doorX, 0, sz, 1.0, 2.2, 'x', -1.3, 0, 0, {
+        // Glass door at FRONT of shop (right side of facade, slides left along X)
+        const shopDoorX = sx + shopBodyW / 2 - (doorSegW > 0.3 ? doorSegW / 2 : 0) - doorW3 / 2 - 0.1;
+        addAutoDoor(cityGroup, shopDoorX, 0, sz, doorW3, 2.2, 'x', -doorW3 - 0.2, 0, 0, {
           thinAxis: 'z', triggerDist: 3, closeDist: 5, speed: 8,
+          material: glassMat3, // transparent glass door
         });
 
         // Awning
@@ -1521,10 +1526,18 @@ function createCity(scene) {
         // Counter (center)
         cityGroup.add(makeBox(shopBodyW * 0.4, 1.0, 0.6, shelfMat, sx, 0.5, shopCZ + 1));
 
-        // Wall colliders (3 sides, door gap on right wall)
-        addCollider(sx - shopBodyW / 2, shopCZ, 0.5, sD);           // left
-        addCollider(sx, sz - sD + 0.15, shopBodyW, 0.5);            // back
-        addCollider(sx + shopBodyW / 2, shopCZ - 1, 0.5, sD - 2);  // right (short, door gap at front)
+        // Wall colliders (left, right, back full — front has door gap)
+        addCollider(sx - shopBodyW / 2, shopCZ, 0.5, sD);           // left (full)
+        addCollider(sx + shopBodyW / 2, shopCZ, 0.5, sD);           // right (full)
+        addCollider(sx, sz - sD + 0.15, shopBodyW, 0.5);            // back (full)
+        // Front: left of door
+        const frontCollL = shopDoorX - doorW3 / 2 - (sx - shopBodyW / 2);
+        if (frontCollL > 1) addCollider(sx - shopBodyW / 2 + frontCollL / 2, sz, frontCollL, 0.5);
+        // Front: right of door
+        const frontRightEdge = sx + shopBodyW / 2;
+        const frontCollRStart = shopDoorX + doorW3 / 2;
+        const frontCollR = frontRightEdge - frontCollRStart;
+        if (frontCollR > 0.5) addCollider(frontCollRStart + frontCollR / 2, sz, frontCollR, 0.5);
         shopCount++;
       }
 
