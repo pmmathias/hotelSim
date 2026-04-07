@@ -1021,7 +1021,7 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   });
   // Lift interior (mirror, buttons, light)
   const mirrorMat2 = getCachedMat('mirror', () => new THREE.MeshStandardMaterial({ color: 0xaabbcc, roughness: 0.02, metalness: 0.8, envMap, envMapIntensity: 1.0 }));
-  group.add(makeBox(liftW - 0.5, H - 1.5, 0.04, mirrorMat2, liftX - liftW / 2 + 0.2, H / 2, liftZ));
+  group.add(makeBox(0.04, H - 1.5, liftD - 0.5, mirrorMat2, liftX - liftW / 2 + 0.1, H / 2, liftZ));
   const btnPanelMat = getCachedMat('btn_panel', () => new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5, metalness: 0.3 }));
   group.add(makeBox(0.3, 0.6, 0.04, btnPanelMat, liftX, 1.3, liftZ + liftD / 2 - 0.1));
   const btnGlow = new THREE.MeshStandardMaterial({ color: 0x44ff44, emissive: 0x44ff44, emissiveIntensity: 0.8 });
