@@ -11,7 +11,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 // GTAOPass removed – too expensive (triples draw calls)
-import { Water } from 'three/addons/objects/Water.js';
+// Water addon removed – custom pool shader used instead (no planar reflection cost)
 // RectAreaLightUniformsLib removed – too expensive, using baked lightmap instead
 import {
   generateAllTextures,
@@ -1780,93 +1780,141 @@ function createLEDStrips(group, width, depth, totalH, floorH, floors, phase, nam
 // ---------------------------------------------------------------------------
 // Pool with Water addon
 // ---------------------------------------------------------------------------
-let poolNormalsTex = null;
-function getPoolNormals() {
-  if (poolNormalsTex) return poolNormalsTex;
-  const size = 512;
+// ── Custom Pool Water Shader (Dual Normal Maps + Fresnel + Caustics) ────
+// No planar reflection = no extra scene render = zero perf cost
+let _poolNormTex1 = null, _poolNormTex2 = null;
+
+function _genPoolNormal(seed) {
+  const size = 256;
   const canvas = document.createElement('canvas');
   canvas.width = size; canvas.height = size;
   const ctx = canvas.getContext('2d');
   const img = ctx.createImageData(size, size);
   const d = img.data;
-
-  // Multi-octave fine ripple normals for pool water
+  // Hash-based noise to break sine regularity
+  const hash = (x, y) => {
+    let h = (x * 374761393 + y * 668265263 + seed * 1013904223) | 0;
+    h = ((h >> 13) ^ h) * 1274126177; h = ((h >> 16) ^ h);
+    return (h & 0xffff) / 65536.0;
+  };
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const i = (y * size + x) * 4;
       const u = x / size, v = y / size;
-
-      // 4 overlapping octaves – small, fine ripples like a real pool
       let nx = 0, ny = 0;
-      // Octave 1: gentle large swell
-      nx += Math.sin(u * 6.28 * 2 + v * 3.0) * 0.12;
-      ny += Math.cos(v * 6.28 * 2 + u * 2.5) * 0.12;
-      // Octave 2: medium ripples
-      nx += Math.sin(u * 6.28 * 5 + v * 6.28 * 3) * 0.08;
-      ny += Math.cos(v * 6.28 * 5 - u * 6.28 * 2) * 0.08;
-      // Octave 3: fine ripples
-      nx += Math.sin(u * 6.28 * 11 + v * 6.28 * 7) * 0.05;
-      ny += Math.cos(v * 6.28 * 9 + u * 6.28 * 13) * 0.05;
-      // Octave 4: micro detail
-      nx += Math.sin(u * 6.28 * 23 - v * 6.28 * 17) * 0.025;
-      ny += Math.cos(v * 6.28 * 19 + u * 6.28 * 21) * 0.025;
-
-      d[i]     = Math.floor(Math.min(255, Math.max(0, nx * 512 + 128)));
-      d[i + 1] = Math.floor(Math.min(255, Math.max(0, ny * 512 + 128)));
-      d[i + 2] = 220; // z slightly less than 255 to catch more light angles
+      // 5 octaves with hash perturbation
+      const perturb = hash(x, y) * 0.3 - 0.15;
+      nx += Math.sin((u + perturb) * 6.28 * 3 + v * 4.0 + seed) * 0.10;
+      ny += Math.cos((v + perturb) * 6.28 * 3 + u * 3.5 + seed) * 0.10;
+      nx += Math.sin(u * 6.28 * 7 + v * 6.28 * 5 + seed * 2) * 0.07;
+      ny += Math.cos(v * 6.28 * 6 - u * 6.28 * 4 + seed * 2) * 0.07;
+      nx += Math.sin(u * 6.28 * 13 + v * 6.28 * 9 + seed * 3) * 0.04;
+      ny += Math.cos(v * 6.28 * 11 + u * 6.28 * 15 + seed * 3) * 0.04;
+      nx += Math.sin(u * 6.28 * 23 - v * 6.28 * 19 + seed * 5) * 0.025;
+      ny += Math.cos(v * 6.28 * 21 + u * 6.28 * 25 + seed * 5) * 0.025;
+      nx += (hash(x * 3, y * 7) - 0.5) * 0.03; // micro noise
+      ny += (hash(x * 7, y * 3) - 0.5) * 0.03;
+      d[i]     = Math.min(255, Math.max(0, nx * 512 + 128)) | 0;
+      d[i + 1] = Math.min(255, Math.max(0, ny * 512 + 128)) | 0;
+      d[i + 2] = 215;
       d[i + 3] = 255;
     }
   }
   ctx.putImageData(img, 0, 0);
-  poolNormalsTex = new THREE.CanvasTexture(canvas);
-  poolNormalsTex.wrapS = THREE.RepeatWrapping;
-  poolNormalsTex.wrapT = THREE.RepeatWrapping;
-  return poolNormalsTex;
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
 }
 
-let poolWaterCount = 0;
-const MAX_REFLECTIVE_POOLS = 2; // only 2 largest pools get expensive planar reflection
-const animatedPoolMats = [];    // env-mapped pools with animated normals
+function getPoolNormals() { if (!_poolNormTex1) _poolNormTex1 = _genPoolNormal(0); return _poolNormTex1; }
+function getPoolNormals2() { if (!_poolNormTex2) _poolNormTex2 = _genPoolNormal(7.3); return _poolNormTex2; }
+
+// Custom pool water ShaderMaterial
+function createPoolWaterMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uNormal1: { value: getPoolNormals() },
+      uNormal2: { value: getPoolNormals2() },
+      uEnvMap: { value: envMap },
+      uWaterColor: { value: new THREE.Color(0x006994) },
+      uOpacity: { value: 0.88 },
+      uFresnelPower: { value: 4.0 },
+      uReflectivity: { value: 0.55 },
+      uNormalStrength: { value: 0.35 },
+      uCausticIntensity: { value: 0.12 },
+      // Dual normal map scales + flow directions
+      uScale1: { value: new THREE.Vector2(6, 6) },
+      uScale2: { value: new THREE.Vector2(14, 14) },
+      uFlow1: { value: new THREE.Vector2(0.035, 0.025) },
+      uFlow2: { value: new THREE.Vector2(-0.02, 0.04) },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      varying vec3 vWorldPos;
+      varying vec3 vViewDir;
+      void main() {
+        vUv = uv;
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vWorldPos = wp.xyz;
+        vViewDir = normalize(cameraPosition - wp.xyz);
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime;
+      uniform sampler2D uNormal1, uNormal2;
+      uniform samplerCube uEnvMap;
+      uniform vec3 uWaterColor;
+      uniform float uOpacity, uFresnelPower, uReflectivity, uNormalStrength, uCausticIntensity;
+      uniform vec2 uScale1, uScale2, uFlow1, uFlow2;
+
+      varying vec2 vUv;
+      varying vec3 vWorldPos;
+      varying vec3 vViewDir;
+
+      void main() {
+        // Dual scrolling normal maps (different scales + directions = organic ripples)
+        vec2 uv1 = vUv * uScale1 + uTime * uFlow1;
+        vec2 uv2 = vUv * uScale2 + uTime * uFlow2;
+        vec3 n1 = texture2D(uNormal1, uv1).xyz * 2.0 - 1.0;
+        vec3 n2 = texture2D(uNormal2, uv2).xyz * 2.0 - 1.0;
+        vec3 normal = normalize(vec3((n1.xy + n2.xy) * uNormalStrength, 1.0));
+
+        // Fresnel reflection (angle-dependent: steep = see floor, grazing = see sky)
+        float fresnel = pow(1.0 - max(dot(vViewDir, vec3(normal.x, 1.0, normal.y)), 0.0), uFresnelPower);
+        vec3 reflDir = reflect(-vViewDir, normalize(vec3(normal.x, 1.0, normal.y)));
+        vec3 reflected = textureCube(uEnvMap, reflDir).rgb;
+
+        // Caustic shimmer (two layers of animated sin patterns)
+        vec2 cp = vWorldPos.xz * 0.4;
+        float c1 = smoothstep(0.35, 0.0, abs(sin(cp.x * 12.0 + uTime * 2.0) * cos(cp.y * 11.0 - uTime * 1.4)) - 0.25);
+        float c2 = smoothstep(0.35, 0.0, abs(sin(cp.x * 8.0 - uTime * 1.1) * cos(cp.y * 9.5 + uTime * 0.8)) - 0.25);
+        float caustic = (c1 + c2) * 0.5 * uCausticIntensity;
+
+        // Combine: water color + reflection + caustic highlight
+        vec3 color = mix(uWaterColor + caustic, reflected, fresnel * uReflectivity);
+        gl_FragColor = vec4(color, uOpacity);
+      }
+    `,
+    transparent: true,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+}
+
+const poolWaterMeshes = []; // custom shader pools (time uniform updated per frame)
 
 function createPool(scene, x, z, w, d) {
-  const isReflective = (w * d >= 800) && poolWaterCount < MAX_REFLECTIVE_POOLS;
-
-  if (isReflective) {
-    // Large pools: full planar reflection (renders scene twice per pool!)
-    poolWaterCount++;
-    const waterSurface = new Water(new THREE.PlaneGeometry(w, d), {
-      textureWidth: 256, textureHeight: 256,
-      waterNormals: getPoolNormals(),
-      sunDirection: new THREE.Vector3(100, 120, 80).normalize(),
-      sunColor: 0xffffff,
-      waterColor: 0x006994,
-      distortionScale: 1.0,
-      fog: false, alpha: 0.92,
-    });
-    waterSurface.material.uniforms['size'].value = 0.003;
-    waterSurface.rotation.x = -Math.PI / 2;
-    waterSurface.position.set(x, 0.35, z);
-    scene.add(waterSurface);
-    waterMeshes.push(waterSurface);
-    registerSpatial(waterSurface);
-  } else {
-    // Smaller pools: env-mapped with animated normal map (cheap, still looks good)
-    const normals = getPoolNormals().clone();
-    normals.wrapS = THREE.RepeatWrapping;
-    normals.wrapT = THREE.RepeatWrapping;
-    normals.repeat.set(4, 4); // high-frequency ripples
-    const poolMat = new THREE.MeshStandardMaterial({
-      color: 0x1a99b5, roughness: 0.05, metalness: 0.25,
-      transparent: true, opacity: 0.88,
-      envMap, envMapIntensity: 0.9,
-      normalMap: normals,
-      normalScale: new THREE.Vector2(0.8, 0.8),
-    });
-    const waterMesh = makePlane(w, d, poolMat, x, 0.35, z);
-    scene.add(waterMesh);
-    registerSpatial(waterMesh);
-    animatedPoolMats.push(poolMat);
-  }
+  // All pools use custom shader (no planar reflection, zero extra cost)
+  const mat = createPoolWaterMaterial();
+  const geo = new THREE.PlaneGeometry(w, d);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.set(x, 0.35, z);
+  scene.add(mesh);
+  poolWaterMeshes.push(mesh);
+  registerSpatial(mesh);
 
   // Pool floor (visible through water – light blue tiles)
   const poolFloorMat = getCachedMat('poolfloor', () => {
@@ -3333,18 +3381,9 @@ function animate() {
     }
   }
 
-  // Water animation – update time for reflective pools
-  for (let i = 0; i < waterMeshes.length; i++) {
-    const w = waterMeshes[i];
-    const isSea = (i === waterMeshes.length - 1);
-    w.material.uniforms['time'].value += dt * (isSea ? 0.6 : 0.3); // pools: lively ripple movement
-  }
-  // Animate normal map offset for env-mapped pools (subtle wave motion)
-  if (frameCount % 2 === 0) {
-    for (const pm of animatedPoolMats) {
-      pm.normalMap.offset.x += dt * 0.06;
-      pm.normalMap.offset.y += dt * 0.03;
-    }
+  // Pool water shader: just update uTime uniform (zero perf cost, no scene re-render)
+  for (const pm of poolWaterMeshes) {
+    pm.material.uniforms.uTime.value = elapsedTime;
   }
 
   // Auto-doors (check every 3rd frame for performance)
