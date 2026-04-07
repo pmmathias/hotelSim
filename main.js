@@ -686,28 +686,32 @@ function updateLifts(cam, dt) {
     const wz = lift.buildingZ + lift.localZ;
     const px = cam.position.x, pz = cam.position.z, py = cam.position.y;
 
-    // Check if player is inside lift shaft
-    const inLift = Math.abs(px - wx) < lift.w / 2 &&
-                   Math.abs(pz - wz) < lift.d / 2 &&
-                   py > lift.currentFloor * lift.H &&
-                   py < (lift.currentFloor + 1) * lift.H + 2;
+    // Door Y tracks current floor (so doors are visible on every floor)
+    const doorY = lift.currentFloor * lift.H + lift.H / 2 - 0.1;
+    lift.doorL.position.y = doorY;
+    lift.doorR.position.y = doorY;
+
+    // Check if player is inside lift shaft (generous Y range: ±3m from current floor)
+    const floorY = lift.currentFloor * lift.H;
+    const inLift = Math.abs(px - wx) < lift.w / 2 + 0.3 &&
+                   Math.abs(pz - wz) < lift.d / 2 + 0.3 &&
+                   py > floorY - 1 &&
+                   py < floorY + lift.H + 3;
 
     switch (lift.state) {
       case 'idle':
         // Doors open, waiting for player to enter
-        lift.doorL.position.z = lift.doorClosedZL - 1; // open position
+        lift.doorL.position.z = lift.doorClosedZL - 1;
         lift.doorR.position.z = lift.doorClosedZR + 1;
         if (inLift) {
           lift.state = 'closing';
           lift.timer = 0;
-          // Pick next floor (cycle: 0→1→2→0)
           lift.targetFloor = (lift.currentFloor + 1) % 3;
         }
         break;
 
       case 'closing':
         lift.timer += dt;
-        // Doors closing animation (1 second)
         const closeT = Math.min(1, lift.timer / 1.0);
         lift.doorL.position.z = lift.doorClosedZL - 1 + closeT * 1;
         lift.doorR.position.z = lift.doorClosedZR + 1 - closeT * 1;
@@ -719,14 +723,17 @@ function updateLifts(cam, dt) {
 
       case 'moving':
         lift.timer += dt;
-        // Move camera between floors (2 seconds)
         const moveT = Math.min(1, lift.timer / 2.0);
-        const smoothT = moveT * moveT * (3 - 2 * moveT); // smoothstep
+        const smoothT = moveT * moveT * (3 - 2 * moveT);
         const fromY = lift.currentFloor * lift.H + PLAYER_HEIGHT;
         const toY = lift.targetFloor * lift.H + PLAYER_HEIGHT;
         if (inLift || Math.abs(px - wx) < lift.w) {
           cam.position.y = fromY + (toY - fromY) * smoothT;
         }
+        // Move doors with the cabin
+        const cabinY = fromY + (toY - fromY) * smoothT - PLAYER_HEIGHT + lift.H / 2 - 0.1;
+        lift.doorL.position.y = cabinY;
+        lift.doorR.position.y = cabinY;
         if (moveT >= 1) {
           lift.currentFloor = lift.targetFloor;
           lift.state = 'opening';
@@ -736,7 +743,6 @@ function updateLifts(cam, dt) {
 
       case 'opening':
         lift.timer += dt;
-        // Doors opening (1 second)
         const openT = Math.min(1, lift.timer / 1.0);
         lift.doorL.position.z = lift.doorClosedZL - openT * 1;
         lift.doorR.position.z = lift.doorClosedZR + openT * 1;
@@ -1412,37 +1418,46 @@ function createCity(scene) {
         const sD = 6 + Math.random() * 4;
         const facadeMat = facadeMats[shopCount % 5];
 
-        // Main building (textured facade)
-        const shop = makeBox(shopW - 1, sH, sD, facadeMat, sx, sH / 2, sz - sD / 2);
-        shop.castShadow = true; shop.receiveShadow = true;
-        cityGroup.add(shop);
-
-        // Dark sockel (base strip, 0.8m tall)
-        cityGroup.add(makeBox(shopW - 0.8, 0.8, 0.15, sockelMat, sx, 0.4, sz + 0.05));
-
-        // Roof
-        cityGroup.add(makeBox(shopW, 0.2, sD + 0.5, shopRoofMat, sx, sH + 0.1, sz - sD / 2));
-
-        // Schaufenster (large glass window, ground floor)
+        // Main building walls (4 sides, open at door)
+        const shopBodyW = shopW - 1;
+        const shopCZ = sz - sD / 2; // center Z of shop interior
+        const doorX = sx + shopW / 2 - 1.5;
+        // Left wall
+        cityGroup.add(makeBox(0.3, sH, sD, facadeMat, sx - shopBodyW / 2, sH / 2, shopCZ));
+        // Right wall (split around door: lower portion + above door)
+        const doorSegD = sD - 2; // wall segment depth excluding door zone
+        cityGroup.add(makeBox(0.3, sH, doorSegD, facadeMat, sx + shopBodyW / 2, sH / 2, shopCZ - 1));
+        cityGroup.add(makeBox(0.3, sH - 2.4, 2, facadeMat, sx + shopBodyW / 2, 2.4 + (sH - 2.4) / 2, sz - 0.5));
+        // Back wall
+        cityGroup.add(makeBox(shopBodyW, sH, 0.3, facadeMat, sx, sH / 2, sz - sD + 0.15));
+        // Front wall (two segments around schaufenster)
         const winW = shopW - 2.5;
-        cityGroup.add(makeBox(winW, 2.0, 0.08, glassMat3, sx, 1.8, sz + 0.05));
-        // Interior glow behind glass (warm lit shop inside)
-        cityGroup.add(makeBox(winW - 0.2, 1.8, 0.04, interiorGlowMat, sx, 1.8, sz - 0.1));
+        const frontSegW = (shopBodyW - winW) / 2;
+        if (frontSegW > 0.2) {
+          cityGroup.add(makeBox(frontSegW, sH, 0.3, facadeMat, sx - shopBodyW / 2 + frontSegW / 2, sH / 2, sz));
+          cityGroup.add(makeBox(frontSegW, sH, 0.3, facadeMat, sx + shopBodyW / 2 - frontSegW / 2, sH / 2, sz));
+        }
+        // Front wall above window
+        cityGroup.add(makeBox(winW, sH - 2.8, 0.3, facadeMat, sx, 2.8 + (sH - 2.8) / 2, sz));
 
-        // Upper floor windows (2 small windows)
+        // Dark sockel
+        cityGroup.add(makeBox(shopW - 0.8, 0.8, 0.15, sockelMat, sx, 0.4, sz + 0.05));
+        // Roof
+        cityGroup.add(makeBox(shopW, 0.2, sD + 0.5, shopRoofMat, sx, sH + 0.1, shopCZ));
+        // Schaufenster glass
+        cityGroup.add(makeBox(winW, 2.0, 0.08, glassMat3, sx, 1.8, sz + 0.05));
+        // Upper floor windows
         if (sH > 5) {
-          for (const wx of [-shopW / 4, shopW / 4]) {
+          for (const wx of [-shopW / 4, shopW / 4])
             cityGroup.add(makeBox(1.2, 1.0, 0.06, glassMat3, sx + wx, sH - 1.5, sz + 0.05));
-          }
         }
 
-        // Door (wood frame + dark opening)
-        const doorMat2 = getCachedMat('shop_door', () => new THREE.MeshStandardMaterial({
-          map: textures.woodWalnut, roughness: 0.5,
-        }));
-        cityGroup.add(makeBox(1.0, 2.2, 0.1, doorMat2, sx + shopW / 2 - 1.5, 1.1, sz + 0.05));
+        // Door → Auto-Door (slides in -Z when player approaches)
+        addAutoDoor(cityGroup, doorX, 0, sz, 1.0, 2.2, 'z', -1.5, 0, 0, {
+          triggerDist: 3, closeDist: 5, speed: 8,
+        });
 
-        // Awning (striped canopy)
+        // Awning
         const awningMat = getCachedMat('awning_' + (shopCount % 5), () => new THREE.MeshStandardMaterial({
           color: awningColors[shopCount % 5], roughness: 0.8, side: THREE.DoubleSide,
         }));
@@ -1457,7 +1472,7 @@ function createCity(scene) {
         ledStrips.push({ meshes: [cityGroup.children[cityGroup.children.length - 1]],
           mat: signMat3, phase: shopCount * 0.3, style: 'neon' });
 
-        // Flower box on schaufenster sill
+        // Flower box
         if (shopCount % 3 === 0) {
           const potMat2 = getCachedMat('pot', () => new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.7 }));
           const plantMat2 = getCachedMat('plant', () => new THREE.MeshStandardMaterial({ color: 0x2a7a2a, roughness: 0.8 }));
@@ -1465,7 +1480,41 @@ function createCity(scene) {
           cityGroup.add(makeBox(winW * 0.5, 0.3, 0.15, plantMat2, sx, 1.1, sz + 0.15));
         }
 
-        addCollider(sx, sz - sD / 2, shopW - 1, sD);
+        // === SHOP INTERIOR ===
+        // Floor (tile)
+        const shopTileMat = getCachedMat('shop_tile', () => new THREE.MeshStandardMaterial({
+          color: 0xd8d0c0, roughness: 0.4,
+          polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8,
+        }));
+        cityGroup.add(makePlane(shopBodyW - 0.5, sD - 1, shopTileMat, sx, 0.32, shopCZ));
+        // Ceiling light
+        const shopLightMat = getCachedMat('shop_ceil_light', () => new THREE.MeshStandardMaterial({
+          color: 0xfff8f0, emissive: 0xfff0dd, emissiveIntensity: 0.5, side: THREE.DoubleSide,
+        }));
+        cityGroup.add(makeBox(1.5, 0.04, 1.0, shopLightMat, sx, sH - 0.1, shopCZ));
+        // Shelves (back wall, 2 units)
+        const shelfMat = getCachedMat('shelf', () => new THREE.MeshStandardMaterial({
+          map: textures.woodWalnut, roughness: 0.45,
+        }));
+        const shelfW = shopBodyW * 0.35;
+        for (const ssx of [-1, 1]) {
+          const shelfX = sx + ssx * (shopBodyW / 2 - shelfW / 2 - 0.5);
+          cityGroup.add(makeBox(shelfW, 2.0, 0.4, shelfMat, shelfX, 1.3, sz - sD + 0.6));
+          // Colorful items on shelves
+          for (let row = 0; row < 3; row++) {
+            const itemColor = [0xff6644, 0x44aa66, 0x4488ff, 0xffcc22, 0xaa44ff][((shopCount + row) * 3) % 5];
+            cityGroup.add(makeBox(shelfW * 0.8, 0.15, 0.2,
+              getCachedMat('item_' + itemColor, () => new THREE.MeshStandardMaterial({ color: itemColor, roughness: 0.6 })),
+              shelfX, 0.5 + row * 0.6, sz - sD + 0.55));
+          }
+        }
+        // Counter (center)
+        cityGroup.add(makeBox(shopBodyW * 0.4, 1.0, 0.6, shelfMat, sx, 0.5, shopCZ + 1));
+
+        // Wall colliders (3 sides, door gap on right wall)
+        addCollider(sx - shopBodyW / 2, shopCZ, 0.5, sD);           // left
+        addCollider(sx, sz - sD + 0.15, shopBodyW, 0.5);            // back
+        addCollider(sx + shopBodyW / 2, shopCZ - 1, 0.5, sD - 2);  // right (short, door gap at front)
         shopCount++;
       }
 
@@ -1538,18 +1587,45 @@ function createCity(scene) {
       const shopX = wingX + shopSide * (streetW / 2 + sD / 2 + 2);
       const facadeMat2 = facadeMats[si % 5];
 
-      cityGroup.add(makeBox(sW, sH, sD, facadeMat2, shopX, sH / 2, sz));
-      cityGroup.add(makeBox(sW + 1, 0.2, sD + 0.5, shopRoofMat, shopX, sH + 0.1, sz));
-      // Schaufenster
-      cityGroup.add(makeBox(sW - 3, 2.0, 0.08, glassMat3, shopX - shopSide * (sD / 2 - 0.1), 1.8, sz));
-      cityGroup.add(makeBox(sW - 3.5, 1.8, 0.04, interiorGlowMat, shopX - shopSide * (sD / 2 - 0.2), 1.8, sz));
+      // Wing shop: walls (4 sides, door on street-facing side)
+      const faceSide = -shopSide; // street-facing wall direction
+      const faceX = shopX + faceSide * sD / 2; // street-facing wall X
+      // Back wall
+      cityGroup.add(makeBox(0.3, sH, sW, facadeMat2, shopX - faceSide * sD / 2, sH / 2, sz));
+      // North + South walls
+      cityGroup.add(makeBox(sD, sH, 0.3, facadeMat2, shopX, sH / 2, sz - sW / 2));
+      cityGroup.add(makeBox(sD, sH, 0.3, facadeMat2, shopX, sH / 2, sz + sW / 2));
+      // Front wall (with window gap)
+      cityGroup.add(makeBox(0.3, sH - 2.8, sW, facadeMat2, faceX, 2.8 + (sH - 2.8) / 2, sz));
+      // Roof
+      cityGroup.add(makeBox(sD + 0.5, 0.2, sW + 1, shopRoofMat, shopX, sH + 0.1, sz));
+      // Schaufenster glass
+      cityGroup.add(makeBox(0.08, 2.0, sW - 3, glassMat3, faceX + faceSide * 0.05, 1.8, sz));
+      // Door (auto-door, slides along Z)
+      addAutoDoor(cityGroup, faceX, 0, sz + sW / 2 - 1.5, 1.0, 2.2, 'z', -1.5, 0, 0, {
+        triggerDist: 3, closeDist: 5, speed: 8,
+      });
       // Neon sign
       const nc = neonColors[(shopCount + si) % neonColors.length];
       const nsm = new THREE.MeshStandardMaterial({ color: nc, emissive: nc, emissiveIntensity: 0.3, roughness: 0.2 });
-      cityGroup.add(makeBox(sW - 2, 0.6, 0.08, nsm, shopX - shopSide * (sD / 2 - 0.1), sH - 0.4, sz));
+      cityGroup.add(makeBox(0.08, 0.6, sW - 2, nsm, faceX + faceSide * 0.1, sH - 0.4, sz));
       ledStrips.push({ meshes: [cityGroup.children[cityGroup.children.length - 1]], mat: nsm, phase: si * 0.5, style: 'neon' });
-
-      addCollider(shopX, sz, sW, sD);
+      // Interior: floor + shelves + counter
+      const shopTileMat2 = getCachedMat('shop_tile', () => new THREE.MeshStandardMaterial({
+        color: 0xd8d0c0, roughness: 0.4, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -8,
+      }));
+      cityGroup.add(makePlane(sD - 1, sW - 1, shopTileMat2, shopX, 0.32, sz));
+      const shelfMat2 = getCachedMat('shelf', () => new THREE.MeshStandardMaterial({ map: textures.woodWalnut, roughness: 0.45 }));
+      cityGroup.add(makeBox(0.4, 2.0, sW * 0.35, shelfMat2, shopX - faceSide * (sD / 2 - 0.6), 1.3, sz));
+      cityGroup.add(makeBox(sD * 0.3, 1.0, 0.6, shelfMat2, shopX, 0.5, sz));
+      const shopLightMat2 = getCachedMat('shop_ceil_light', () => new THREE.MeshStandardMaterial({
+        color: 0xfff8f0, emissive: 0xfff0dd, emissiveIntensity: 0.5, side: THREE.DoubleSide,
+      }));
+      cityGroup.add(makeBox(1.0, 0.04, 1.5, shopLightMat2, shopX, sH - 0.1, sz));
+      // Wall colliders (3 sides + door gap)
+      addCollider(shopX - faceSide * sD / 2, sz, 0.5, sW);         // back
+      addCollider(shopX, sz - sW / 2, sD, 0.5);                     // north
+      addCollider(shopX, sz + sW / 2, sD, 0.5);                     // south (door gap handled by auto-door)
     }
   }
 
