@@ -1735,46 +1735,25 @@ function getPoolNormals() {
 }
 
 let poolWaterCount = 0;
-const MAX_REFLECTIVE_POOLS = 2; // Allow up to 2 large pools to use planar Water reflections
-const animatedPoolMats = []; // pool materials with animated normals
+const animatedPoolMats = []; // unused now, all pools use Water shader
 
 function createPool(scene, x, z, w, d) {
-  const isLarge = (w * d > 800) && poolWaterCount < MAX_REFLECTIVE_POOLS;
-
-  if (isLarge) {
-    poolWaterCount++;
-    const waterSurface = new Water(new THREE.PlaneGeometry(w, d), {
-      textureWidth: 256, textureHeight: 256,
-      waterNormals: getPoolNormals(),
-      sunDirection: new THREE.Vector3(100, 120, 80).normalize(),
-      sunColor: 0xffffff,
-      waterColor: 0x006994,
-      distortionScale: 1.5,
-      fog: false, alpha: 0.92,
-    });
-    waterSurface.material.uniforms['size'].value = 0.2;
-    waterSurface.rotation.x = -Math.PI / 2;
-    waterSurface.position.set(x, 0.35, z);
-    scene.add(waterSurface);
-    waterMeshes.push(waterSurface);
-    registerSpatial(waterSurface);
-  } else {
-    // Env-mapped pool with animated normal map for wave motion
-    const normals = getPoolNormals().clone();
-    normals.wrapS = THREE.RepeatWrapping;
-    normals.wrapT = THREE.RepeatWrapping;
-    const poolMat = new THREE.MeshStandardMaterial({
-      color: 0x1a99b5, roughness: 0.08, metalness: 0.2,
-      transparent: true, opacity: 0.85,
-      envMap, envMapIntensity: 0.8,
-      normalMap: normals,
-      normalScale: new THREE.Vector2(0.6, 0.6),
-    });
-    const waterMesh = makePlane(w, d, poolMat, x, 0.35, z);
-    scene.add(waterMesh);
-    registerSpatial(waterMesh);
-    animatedPoolMats.push(poolMat);
-  }
+  // ALL pools use the Water addon (planar reflections) with gentle, slow waves
+  const waterSurface = new Water(new THREE.PlaneGeometry(w, d), {
+    textureWidth: 256, textureHeight: 256,
+    waterNormals: getPoolNormals(),
+    sunDirection: new THREE.Vector3(100, 120, 80).normalize(),
+    sunColor: 0xffffff,
+    waterColor: 0x006994,
+    distortionScale: 0.4,   // gentle distortion (was 1.5)
+    fog: false, alpha: 0.92,
+  });
+  waterSurface.material.uniforms['size'].value = 0.8; // large wave scale = low frequency (was 0.2)
+  waterSurface.rotation.x = -Math.PI / 2;
+  waterSurface.position.set(x, 0.35, z);
+  scene.add(waterSurface);
+  waterMeshes.push(waterSurface);
+  registerSpatial(waterSurface);
 
   // Pool floor (visible through water – light blue tiles)
   const poolFloorMat = getCachedMat('poolfloor', () => {
@@ -3222,7 +3201,7 @@ function animate() {
   for (let i = 0; i < waterMeshes.length; i++) {
     const w = waterMeshes[i];
     const isSea = (i === waterMeshes.length - 1);
-    w.material.uniforms['time'].value += dt * (isSea ? 0.6 : 0.15);
+    w.material.uniforms['time'].value += dt * (isSea ? 0.6 : 0.04); // pools: very slow waves
   }
   // Animate normal map offset for env-mapped pools (subtle wave motion)
   if (frameCount % 2 === 0) {
