@@ -851,10 +851,10 @@ function createHotelInterior(group, width, depth, floorH, name) {
 }
 
 function createStaircase(group, W, D, H, marbleMat, damaskMat, ceilPanelMat) {
-  const stairX = W / 2 - 4;   // against east wall
-  const stairW = 3.5;
-  const stairD = 10;
-  const stairStartZ = -D / 2 + 4;
+  const stairW = Math.min(5, W * 0.06);  // wider stairs, scaled to building
+  const stairX = W / 2 - stairW / 2 - 1; // against east wall with 1m clearance
+  const stairD = Math.min(10, D * 0.4);   // max 40% of building depth
+  const stairStartZ = -D / 2 + 3;
 
   const stairMat = getCachedMat('stair_marble', () => new THREE.MeshStandardMaterial({
     map: textures.lobbyFloor, roughness: 0.3, envMap, envMapIntensity: 0.2,
@@ -863,10 +863,9 @@ function createStaircase(group, W, D, H, marbleMat, damaskMat, ceilPanelMat) {
     color: 0xcccccc, metalness: 0.6, roughness: 0.2,
   }));
 
-  // Stairwell walls (enclosing the staircase, all 3 floors)
+  // Stairwell: south back wall only (west side open to lobby for easy access)
   const swH = H * 3;
-  group.add(makeBox(0.15, swH, stairD + 2, damaskMat, stairX - stairW / 2 - 0.1, swH / 2, stairStartZ + stairD / 2));
-  group.add(makeBox(stairW + 0.5, swH, 0.15, damaskMat, stairX, swH / 2, stairStartZ + stairD + 1));
+  group.add(makeBox(stairW + 1, swH, 0.15, damaskMat, stairX, swH / 2, stairStartZ + stairD + 1));
   // North wall with door opening per floor
   for (let fl = 0; fl < 3; fl++) {
     const fy = fl * H;
@@ -1665,11 +1664,11 @@ function createCity(scene) {
 
 // === OLD createLobbyInterior (kept for reference, no longer called) ===
 function registerStairFloors(x, z, width, depth, floorH) {
-  // New staircase: east side, 20 steps per flight, 2 flights (EG→1OG, 1OG→2OG)
-  const stairW = 3.5;
-  const stairD = 10;
-  const stairX = x + width / 2 - 4;
-  const stairStartZ = z - depth / 2 + 4;
+  // Must match createStaircase dimensions exactly
+  const stairW = Math.min(5, width * 0.06);
+  const stairX = x + width / 2 - stairW / 2 - 1;
+  const stairD = Math.min(10, depth * 0.4);
+  const stairStartZ = z - depth / 2 + 3;
 
   for (let flight = 0; flight < 2; flight++) {
     const baseY = flight * floorH;
@@ -1677,27 +1676,22 @@ function registerStairFloors(x, z, width, depth, floorH) {
     const stepH = floorH / stepsPerFlight;
     const stepD = stairD / stepsPerFlight;
 
-    // Register every 2nd step (performance)
     for (let s = 0; s < stepsPerFlight; s += 2) {
-      addFloor(stairX, stairStartZ + s * stepD, stairW + 0.5, stepD * 2 + 0.3, baseY + (s + 2) * stepH);
+      addFloor(stairX, stairStartZ + s * stepD, stairW + 1, stepD * 2 + 0.3, baseY + (s + 2) * stepH);
     }
 
-    // Landing at top of flight
     addFloor(stairX, stairStartZ + stairD + 0.5, stairW + 2, 3, (flight + 1) * floorH);
   }
 
-  // Ground floor (EG) walkable surface
+  // Ground floor walkable surface
   addFloor(x, z, width - 2, depth - 2, 0);
-  // Floor slabs for 1.OG and 2.OG (full width except stairwell)
+  // Floor slabs 1.OG + 2.OG
   for (let fl = 1; fl <= 2; fl++) {
-    addFloor(x, z, width - 8, depth - 4, fl * floorH);
+    addFloor(x, z, width - 4, depth - 2, fl * floorH);
   }
 
-  // Stairwell wall colliders (west + south enclosing stairs, NOT blocking the north entrance)
-  // West wall: exactly stairD depth, aligned with stair area (no overextension)
-  addCollider(stairX - stairW / 2 - 0.1, stairStartZ + stairD / 2, 0.3, stairD);
-  // South wall: blocks walking past the stairs into the void
-  addCollider(stairX, stairStartZ + stairD + 1, stairW + 0.5, 0.3);
+  // South stairwell wall collider only (west side open to lobby)
+  addCollider(stairX, stairStartZ + stairD + 1, stairW + 1, 0.3);
 }
 
 // ---------------------------------------------------------------------------
