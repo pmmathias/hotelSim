@@ -89,10 +89,11 @@ class QuadTreeNode {
 // Collision
 // ---------------------------------------------------------------------------
 const colliders = [];
+const dynamicColliders = []; // colliders that move (e.g. sliding doors) – checked separately
 const floors = [];   // { min:{x,z}, max:{x,z}, y } – walkable surfaces at different heights
 
-function addCollider(x, z, w, d, maxY = Infinity) {
-  colliders.push({ min: { x: x - w / 2, z: z - d / 2 }, max: { x: x + w / 2, z: z + d / 2 }, maxY });
+function addCollider(x, z, w, d, maxY = Infinity, minY = -Infinity) {
+  colliders.push({ min: { x: x - w / 2, z: z - d / 2 }, max: { x: x + w / 2, z: z + d / 2 }, maxY, minY });
 }
 function addFloor(x, z, w, d, y) {
   floors.push({ min: { x: x - w / 2, z: z - d / 2 }, max: { x: x + w / 2, z: z + d / 2 }, y });
@@ -125,14 +126,28 @@ function _rebuildColGrid() {
 
 function checkCollision(px, pz, py) {
   const feetY = py - PLAYER_HEIGHT;
+  const headY = feetY + PLAYER_HEIGHT;
   const key = _colGridKey(px, pz);
   const cell = _colGrid.get(key);
-  if (!cell) return false;
-  for (let i = 0; i < cell.length; i++) {
-    const c = cell[i];
+  if (cell) {
+    for (let i = 0; i < cell.length; i++) {
+      const c = cell[i];
+      if (px + PLAYER_RADIUS > c.min.x && px - PLAYER_RADIUS < c.max.x &&
+          pz + PLAYER_RADIUS > c.min.z && pz - PLAYER_RADIUS < c.max.z) {
+        // Height-limited colliders: only block if player overlaps the height range
+        if (c.maxY < Infinity && feetY > c.maxY) continue;  // player above
+        if (c.minY > -Infinity && headY < c.minY) continue;  // player below
+        return true;
+      }
+    }
+  }
+  // Check dynamic colliders (sliding doors etc.) – small array, no grid needed
+  for (let i = 0; i < dynamicColliders.length; i++) {
+    const c = dynamicColliders[i];
     if (px + PLAYER_RADIUS > c.min.x && px - PLAYER_RADIUS < c.max.x &&
         pz + PLAYER_RADIUS > c.min.z && pz - PLAYER_RADIUS < c.max.z) {
       if (c.maxY < Infinity && feetY > c.maxY) continue;
+      if (c.minY > -Infinity && headY < c.minY) continue;
       return true;
     }
   }
@@ -278,6 +293,116 @@ function getMarbleMat() {
   }));
 }
 
+// ── Detailed toilet model (LatheGeometry bowl + cylinder tank) ──────────
+function createToilet(group, x, y, z, ceramicMat, chromeMat) {
+  // Bowl: LatheGeometry profile (side cross-section of a toilet bowl)
+  const bowlPts = [
+    new THREE.Vector2(0.0, 0.0),    // bottom center
+    new THREE.Vector2(0.18, 0.0),   // bottom edge
+    new THREE.Vector2(0.22, 0.05),  // lower curve
+    new THREE.Vector2(0.23, 0.15),  // mid wall
+    new THREE.Vector2(0.22, 0.28),  // upper wall
+    new THREE.Vector2(0.24, 0.32),  // rim lip outward
+    new THREE.Vector2(0.21, 0.35),  // rim top
+    new THREE.Vector2(0.17, 0.33),  // rim inner
+    new THREE.Vector2(0.12, 0.28),  // inner bowl
+    new THREE.Vector2(0.05, 0.12),  // inner bottom curve
+    new THREE.Vector2(0.0, 0.08),   // drain center
+  ];
+  const bowlGeo = new THREE.LatheGeometry(bowlPts, 16);
+  const bowl = new THREE.Mesh(bowlGeo, ceramicMat);
+  bowl.position.set(x, y, z);
+  bowl.receiveShadow = true;
+  group.add(bowl);
+
+  // Seat (torus ring on top of bowl)
+  const seatGeo = new THREE.TorusGeometry(0.2, 0.025, 6, 16);
+  const seat = new THREE.Mesh(seatGeo, ceramicMat);
+  seat.position.set(x, y + 0.36, z);
+  seat.rotation.x = Math.PI / 2;
+  group.add(seat);
+
+  // Tank (rounded cylinder behind bowl)
+  const tankGeo = new THREE.CylinderGeometry(0.16, 0.18, 0.4, 12);
+  const tank = new THREE.Mesh(tankGeo, ceramicMat);
+  tank.position.set(x, y + 0.35, z - 0.28);
+  tank.receiveShadow = true;
+  group.add(tank);
+
+  // Tank lid (slightly wider disc)
+  const lidGeo = new THREE.CylinderGeometry(0.19, 0.19, 0.03, 12);
+  const lid = new THREE.Mesh(lidGeo, ceramicMat);
+  lid.position.set(x, y + 0.56, z - 0.28);
+  group.add(lid);
+
+  // Flush handle (small chrome cylinder)
+  const handleGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.1, 4);
+  const handle = new THREE.Mesh(handleGeo, chromeMat);
+  handle.position.set(x + 0.15, y + 0.5, z - 0.28);
+  handle.rotation.z = Math.PI / 2;
+  group.add(handle);
+}
+
+// ── Detailed sink model (LatheGeometry basin + pedestal) ────────────────
+function createSink(group, x, y, z, ceramicMat, chromeMat, mirrorMat) {
+  // Basin: LatheGeometry (bowl shape, wider than tall)
+  const basinPts = [
+    new THREE.Vector2(0.0, 0.0),    // drain center
+    new THREE.Vector2(0.08, 0.01),  // drain edge
+    new THREE.Vector2(0.20, 0.04),  // inner bottom
+    new THREE.Vector2(0.26, 0.10),  // inner wall
+    new THREE.Vector2(0.28, 0.14),  // rim inner
+    new THREE.Vector2(0.30, 0.16),  // rim top
+    new THREE.Vector2(0.28, 0.13),  // rim outer
+    new THREE.Vector2(0.25, 0.10),  // outer wall
+    new THREE.Vector2(0.22, 0.02),  // outer bottom
+    new THREE.Vector2(0.0, 0.0),    // close bottom
+  ];
+  const basinGeo = new THREE.LatheGeometry(basinPts, 16);
+  const basin = new THREE.Mesh(basinGeo, ceramicMat);
+  basin.position.set(x, y + 0.75, z);
+  basin.receiveShadow = true;
+  group.add(basin);
+
+  // Pedestal (tapered cylinder from floor to basin)
+  const pedGeo = new THREE.CylinderGeometry(0.08, 0.12, 0.75, 8);
+  const ped = new THREE.Mesh(pedGeo, ceramicMat);
+  ped.position.set(x, y + 0.375, z);
+  ped.receiveShadow = true;
+  group.add(ped);
+
+  // Pedestal base (wider disc at floor)
+  const baseGeo = new THREE.CylinderGeometry(0.15, 0.16, 0.04, 8);
+  const base = new THREE.Mesh(baseGeo, ceramicMat);
+  base.position.set(x, y + 0.02, z);
+  group.add(base);
+
+  // Faucet (chrome: vertical pipe + spout)
+  const pipGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.2, 6);
+  const pip = new THREE.Mesh(pipGeo, chromeMat);
+  pip.position.set(x, y + 1.0, z - 0.18);
+  group.add(pip);
+  // Spout (bent forward)
+  const spoutGeo = new THREE.CylinderGeometry(0.012, 0.015, 0.12, 6);
+  const spout = new THREE.Mesh(spoutGeo, chromeMat);
+  spout.position.set(x, y + 1.05, z - 0.12);
+  spout.rotation.x = Math.PI / 3;
+  group.add(spout);
+  // Handles (two small knobs)
+  const knobGeo = new THREE.SphereGeometry(0.02, 6, 6);
+  for (const side of [-1, 1]) {
+    const knob = new THREE.Mesh(knobGeo, chromeMat);
+    knob.position.set(x + side * 0.08, y + 0.95, z - 0.18);
+    group.add(knob);
+  }
+
+  // Mirror (above sink)
+  const mirrorGeo = new THREE.PlaneGeometry(0.5, 0.7);
+  const mirror = new THREE.Mesh(mirrorGeo, mirrorMat);
+  mirror.position.set(x, y + 1.5, z - 0.32);
+  group.add(mirror);
+}
+
 // ---------------------------------------------------------------------------
 // HDR Env Map from sky
 // ---------------------------------------------------------------------------
@@ -329,7 +454,7 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
   walls.push(makeBox(entranceW, totalH - floorH, wallT, wallMat, 0, floorH + (totalH - floorH) / 2, depth / 2));
   walls.forEach(w => { w.castShadow = true; w.receiveShadow = true; hiGroup.add(w); });
 
-  // Glass entrance doors (north + south)
+  // Glass entrance auto-doors (north + south) – slide open on approach
   const doorGlassMat = getCachedMat('door_glass', () => new THREE.MeshStandardMaterial({
     color: 0x99bbdd, transparent: true, opacity: 0.25, roughness: 0.02, metalness: 0.1,
     envMap, envMapIntensity: 0.8, side: THREE.DoubleSide,
@@ -337,22 +462,27 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
   const doorFrameMat2 = getCachedMat('door_frame', () => new THREE.MeshStandardMaterial({
     color: 0x555555, metalness: 0.5, roughness: 0.2,
   }));
-  const doorH = floorH - 0.3; // slightly less than floor height
+  const doorH = floorH - 0.3;
   for (const faceSign of [-1, 1]) { // -1=north, +1=south
     const dz = faceSign * (depth / 2);
-    // Two glass door panels (left + right of center, with gap for walking through)
-    const panelW = (entranceW - 1.5) / 2; // leave 1.5m walkway in center
+    // Two sliding glass panels – each slides outward when player approaches
+    // Gap between closed panels must be > 2*PLAYER_RADIUS (0.8m) – using 1.5m
+    const panelW = (entranceW - 1.5) / 2;
     for (const side of [-1, 1]) {
       const dx = side * (panelW / 2 + 0.75);
-      hiGroup.add(makeBox(panelW, doorH, 0.06, doorGlassMat, dx, doorH / 2, dz));
+      addAutoDoor(hiGroup, dx, 0, dz, panelW, doorH, 'x', side * (panelW + 0.5), x, z, {
+        material: doorGlassMat,
+        addCollider: true,
+        thinAxis: 'z',
+        triggerDist: 12,   // open early so doors are fully open when player arrives
+        closeDist: 15,
+        speed: 15,
+      });
     }
-    // Metal frame: top crossbar
+    // Metal frame: top crossbar + side pillars (static)
     hiGroup.add(makeBox(entranceW, 0.12, 0.1, doorFrameMat2, 0, doorH, dz));
-    // Frame: side pillars
     hiGroup.add(makeBox(0.1, doorH, 0.1, doorFrameMat2, -entranceW / 2, doorH / 2, dz));
     hiGroup.add(makeBox(0.1, doorH, 0.1, doorFrameMat2, entranceW / 2, doorH / 2, dz));
-    // Frame: center divider
-    hiGroup.add(makeBox(0.08, doorH, 0.1, doorFrameMat2, 0, doorH / 2, dz));
   }
 
   // Floor slabs (no shadow cast – internal)
@@ -392,7 +522,8 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
   for (let f = 0; f < floors; f++) {
     for (let c = 0; c < cols; c++) {
       const bx = startX + c * (balconyW + 0.5);
-      const by = (f + 0.5) * floorH;
+      const byVis = (f + 0.5) * floorH; // visual midpoint of each floor
+      const byFloor = f * floorH;     // walkable floor level (matches room floor)
 
       // Skip balconies in the entrance zone (ground floor, center of building)
       const inEntranceX = Math.abs(bx) < (entranceW / 2 + balconyW / 2);
@@ -406,13 +537,13 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
         const fz_rail = faceSign * (depth / 2 + balconyD);
         const fz_win = faceSign * (depth / 2 + 0.05);
 
-        hiGroup.add(makeBox(balconyW, 0.15, balconyD, balconyMat, bx, by, fz_bal));
-        hiGroup.add(makeBox(balconyW, 1, 0.05, glassMat, bx, by + 0.5, fz_rail));
-        // Make balcony walkable (floor + railing collider)
-        addFloor(x + bx, z + faceSign * (depth / 2 + balconyD / 2), balconyW, balconyD, by);
-        addCollider(x + bx, z + faceSign * (depth / 2 + balconyD), balconyW, 0.1, by + 1.2);
+        hiGroup.add(makeBox(balconyW, 0.15, balconyD, balconyMat, bx, byVis, fz_bal));
+        hiGroup.add(makeBox(balconyW, 1, 0.05, glassMat, bx, byVis + 0.5, fz_rail));
+        // Make balcony walkable at ROOM floor level (not visual midpoint)
+        addFloor(x + bx, z + faceSign * (depth / 2 + balconyD / 2), balconyW, balconyD, byFloor);
+        addCollider(x + bx, z + faceSign * (depth / 2 + balconyD), balconyW, 0.1, byFloor + 1.2, byFloor - 0.5);
         if (faceSign > 0) { // windows only on south
-          hiGroup.add(makeBox(balconyW - 0.6, floorH * 0.6, 0.08, glassMat, bx, by, fz_win));
+          hiGroup.add(makeBox(balconyW - 0.6, floorH * 0.6, 0.08, glassMat, bx, byVis, fz_win));
         }
 
         // DFW LED frames + orange panels (skip entrance zone on ground floor)
@@ -423,16 +554,16 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
           const ledT = 0.1;
           const fz = faceSign * (depth / 2 + 0.35);
 
-          const mt = makeBox(balconyW + 0.2, ledT, ledT, ledMat, bx, by + floorH * 0.35, fz);
-          const mb = makeBox(balconyW + 0.2, ledT, ledT, ledMat, bx, by - floorH * 0.35, fz);
-          const ml = makeBox(ledT, floorH * 0.7 + 0.2, ledT, ledMat, bx - balconyW / 2 - 0.1, by, fz);
-          const mr = makeBox(ledT, floorH * 0.7 + 0.2, ledT, ledMat, bx + balconyW / 2 + 0.1, by, fz);
+          const mt = makeBox(balconyW + 0.2, ledT, ledT, ledMat, bx, byVis + floorH * 0.35, fz);
+          const mb = makeBox(balconyW + 0.2, ledT, ledT, ledMat, bx, byVis - floorH * 0.35, fz);
+          const ml = makeBox(ledT, floorH * 0.7 + 0.2, ledT, ledMat, bx - balconyW / 2 - 0.1, byVis, fz);
+          const mr = makeBox(ledT, floorH * 0.7 + 0.2, ledT, ledMat, bx + balconyW / 2 + 0.1, byVis, fz);
           hiGroup.add(mt); hiGroup.add(mb); hiGroup.add(ml); hiGroup.add(mr);
           ledArr.push(mt, mb, ml, mr);
 
           if (((f * 17 + c * 31) % 10) < 3) {
             hiGroup.add(makeBox(balconyW - 0.2, floorH * 0.65, 0.04, dfwOrangeMat,
-              bx, by, faceSign * (depth / 2 + 0.28)));
+              bx, byVis, faceSign * (depth / 2 + 0.28)));
           }
         }
       }
@@ -507,28 +638,45 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
 // =============================================================================
 // AUTO-DOOR SYSTEM – doors slide open when player approaches
 // =============================================================================
-function addAutoDoor(group, x, y, z, w, h, slideAxis, slideAmount, buildingX, buildingZ) {
-  const doorMat = getCachedMat('auto_door', () => new THREE.MeshStandardMaterial({
+function addAutoDoor(group, x, y, z, w, h, slideAxis, slideAmount, buildingX, buildingZ, opts = {}) {
+  const mat = opts.material || getCachedMat('auto_door', () => new THREE.MeshStandardMaterial({
     map: textures.woodWalnut, roughness: 0.4, color: 0x6a5040,
   }));
+  // thinAxis: which axis is the thin/flat dimension (default = slideAxis)
+  const thinAxis = opts.thinAxis || slideAxis;
   const door = makeBox(
-    slideAxis === 'x' ? 0.08 : w,
+    thinAxis === 'x' ? 0.08 : w,
     h,
-    slideAxis === 'z' ? 0.08 : w,
-    doorMat, x, y + h / 2, z
+    thinAxis === 'z' ? 0.08 : w,
+    mat, x, y + h / 2, z
   );
   group.add(door);
 
+  // Optional collider that moves with the door
+  let colliderRef = null;
+  if (opts.addCollider) {
+    const cw = thinAxis === 'x' ? 0.3 : w;
+    const cd = thinAxis === 'z' ? 0.3 : w;
+    colliderRef = { min: { x: 0, z: 0 }, max: { x: 0, z: 0 }, maxY: Infinity };
+    const wx = buildingX + x, wz = buildingZ + z;
+    colliderRef.min.x = wx - cw / 2; colliderRef.max.x = wx + cw / 2;
+    colliderRef.min.z = wz - cd / 2; colliderRef.max.z = wz + cd / 2;
+    dynamicColliders.push(colliderRef);
+  }
+
   autoDoors.push({
     mesh: door,
-    // World position (building offset added later in animate loop)
     localX: x, localZ: z,
     buildingX, buildingZ,
     slideAxis,
     slideAmount,
     isOpen: false,
-    t: 0, // animation progress 0=closed, 1=open
+    t: 0,
     closedX: x, closedZ: z,
+    colliderRef,
+    triggerDist: opts.triggerDist || 3,
+    closeDist: opts.closeDist || 4.5,
+    speed: opts.speed || 5,
   });
 }
 
@@ -607,20 +755,30 @@ function updateAutoDoors(camX, camZ, dt) {
     const wz = d.buildingZ + d.localZ;
     const dist = Math.sqrt((camX - wx) ** 2 + (camZ - wz) ** 2);
 
-    const shouldOpen = dist < 3;
-    const shouldClose = dist > 4.5;
+    const shouldOpen = dist < d.triggerDist;
+    const shouldClose = dist > d.closeDist;
 
     if (shouldOpen && !d.isOpen) d.isOpen = true;
     if (shouldClose && d.isOpen) d.isOpen = false;
 
     // Smooth animation
     const target = d.isOpen ? 1 : 0;
-    d.t += (target - d.t) * Math.min(1, dt * 5); // lerp speed
+    d.t += (target - d.t) * Math.min(1, dt * d.speed);
 
     if (d.slideAxis === 'x') {
       d.mesh.position.x = d.closedX + d.t * d.slideAmount;
     } else {
       d.mesh.position.z = d.closedZ + d.t * d.slideAmount;
+    }
+
+    // Move collider with door
+    if (d.colliderRef) {
+      const curX = d.buildingX + d.mesh.position.x;
+      const curZ = d.buildingZ + d.mesh.position.z;
+      const hw = (d.colliderRef.max.x - d.colliderRef.min.x) / 2;
+      const hd = (d.colliderRef.max.z - d.colliderRef.min.z) / 2;
+      d.colliderRef.min.x = curX - hw; d.colliderRef.max.x = curX + hw;
+      d.colliderRef.min.z = curZ - hd; d.colliderRef.max.z = curZ + hd;
     }
   }
 }
@@ -648,10 +806,10 @@ function createHotelInterior(group, width, depth, floorH, name) {
     map: textures.woodWalnut, roughness: 0.3, metalness: 0.02,
   }));
   const accentMat = getCachedMat('accent_' + accentColor, () => new THREE.MeshStandardMaterial({
-    color: accentColor, emissive: accentColor, emissiveIntensity: 0.6, roughness: 0.2,
+    color: accentColor, emissive: accentColor, emissiveIntensity: 0.3, roughness: 0.2,
   }));
   const ceilPanelMat = getCachedMat('ceil_panel', () => new THREE.MeshStandardMaterial({
-    color: 0xfff8f0, emissive: 0xfff5e8, emissiveIntensity: 1.5, roughness: 0.2, side: THREE.DoubleSide,
+    color: 0xfff8f0, emissive: 0xfff5e8, emissiveIntensity: 0.6, roughness: 0.2, side: THREE.DoubleSide,
   }));
 
   // === ERDGESCHOSS (y=0..H) ===
@@ -749,42 +907,50 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   // === CEILING ===
   const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W - 1, D - 1), ceilMat);
   ceil.rotation.x = Math.PI / 2;
-  ceil.position.set(0, H - 0.05, 0);
+  ceil.position.set(0, H - 0.15, 0); // just below the floor slab (slab bottom at H-0.125)
   group.add(ceil);
 
   // === INTERIOR WALLS (Damask on all 4 sides) ===
   const panelH = H - 0.8;
   const panelY = panelH / 2 + 0.4;
-  // South wall
-  group.add(makeBox(W - 2, panelH, 0.06, damaskMat, 0, panelY, D / 2 - 0.4));
+  // South wall (0.35m inside exterior wall inner face to avoid Z-fighting)
+  group.add(makeBox(W - 2, panelH, 0.06, damaskMat, 0, panelY, D / 2 - 0.6));
   // North wall (left + right of entrance, 12m gap)
   const northPanelW = (W - 14) / 2;
-  group.add(makeBox(northPanelW, panelH, 0.06, damaskMat, -(northPanelW / 2 + 7), panelY, -(D / 2 - 0.4)));
-  group.add(makeBox(northPanelW, panelH, 0.06, damaskMat, (northPanelW / 2 + 7), panelY, -(D / 2 - 0.4)));
+  group.add(makeBox(northPanelW, panelH, 0.06, damaskMat, -(northPanelW / 2 + 7), panelY, -(D / 2 - 0.6)));
+  group.add(makeBox(northPanelW, panelH, 0.06, damaskMat, (northPanelW / 2 + 7), panelY, -(D / 2 - 0.6)));
   // East wall
-  group.add(makeBox(0.06, panelH, D - 2, damaskMat, W / 2 - 0.4, panelY, 0));
+  group.add(makeBox(0.06, panelH, D - 2, damaskMat, W / 2 - 0.6, panelY, 0));
   // West wall
-  group.add(makeBox(0.06, panelH, D - 2, damaskMat, -(W / 2 - 0.4), panelY, 0));
+  group.add(makeBox(0.06, panelH, D - 2, damaskMat, -(W / 2 - 0.6), panelY, 0));
 
   // === ACCENT STRIP (bottom of south wall) ===
-  group.add(makeBox(W - 2, 0.6, 0.07, accentMat, 0, 0.3, D / 2 - 0.45));
+  group.add(makeBox(W - 2, 0.6, 0.07, accentMat, 0, 0.3, D / 2 - 0.65));
 
-  // === PARTITION WALLS ===
+  // === PARTITION WALLS (with collision) ===
+  const bx = _currentBuildingX, bz = _currentBuildingZ; // world offset for colliders
   // Lift room east wall
   const liftX = -W / 2 + 4;
   group.add(makeBox(T, H, 8, damaskMat, liftX + 2, H / 2, -D / 2 + 4));
+  addCollider(bx + liftX + 2, bz + (-D / 2 + 4), T, 8);
   // Reception west wall
   const recpX = W / 2 - 20;
   group.add(makeBox(T, H, 14, damaskMat, recpX, H / 2, -D / 2 + 7));
+  addCollider(bx + recpX, bz + (-D / 2 + 7), T, 14);
   // Toilet room walls (west side)
   group.add(makeBox(8, H, T, damaskMat, -W / 2 + 5, H / 2, 3));   // south wall
+  addCollider(bx + (-W / 2 + 5), bz + 3, 8, T);
   group.add(makeBox(T, H, 6, damaskMat, -W / 2 + 9, H / 2, 0));   // east wall
+  addCollider(bx + (-W / 2 + 9), bz + 0, T, 6);
   // Bar west wall
   group.add(makeBox(T, H, 10, damaskMat, recpX, H / 2, 5));
-  // Restaurant north wall (with 2 openings)
+  addCollider(bx + recpX, bz + 5, T, 10);
+  // Restaurant north wall (with 2 openings → 2 wall segments)
   const restZ = D / 2 - 12;
   group.add(makeBox(25, H, T, damaskMat, -18, H / 2, restZ));
+  addCollider(bx + (-18), bz + restZ, 25, T);
   group.add(makeBox(18, H, T, damaskMat, 28, H / 2, restZ));
+  addCollider(bx + 28, bz + restZ, 18, T);
 
   // === LOBBY FURNITURE ===
   // Chandelier (center of lobby)
@@ -792,7 +958,7 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
     color: 0xddcc88, metalness: 0.6, roughness: 0.2,
   }));
   const chandelierGlow = new THREE.MeshStandardMaterial({
-    color: 0xffffee, emissive: 0xffffcc, emissiveIntensity: 1.5,
+    color: 0xffffee, emissive: 0xffffcc, emissiveIntensity: 0.8,
   });
   const ring = new THREE.Mesh(new THREE.TorusGeometry(2.0, 0.08, 8, 20), chandelierMat);
   ring.position.set(-5, H - 0.6, -D / 2 + 10);
@@ -883,6 +1049,10 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
     group.add(makeBox(0.15, 0.5, 2, liftMetalMat,
       liftX + liftW / 2, (fl + 1) * H - 0.25, liftZ));
   }
+  // Lift shaft colliders (back/north/south walls – front has door opening)
+  addCollider(bx + liftX - liftW / 2, bz + liftZ, 0.3, liftD);           // back (west)
+  addCollider(bx + liftX, bz + liftZ - liftD / 2, liftW, 0.3);           // north
+  addCollider(bx + liftX, bz + liftZ + liftD / 2, liftW, 0.3);           // south
 
   // Lift door (at ground floor, will be animated by Ticket 111)
   const liftDoorMat = getCachedMat('lift_door', () => new THREE.MeshStandardMaterial({
@@ -945,46 +1115,35 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   }));
   group.add(makePlane(7, 5, tileMat, wcX, 0.35, wcZ));
 
-  // 3 toilet stalls along west wall
-  const toiletMat = getCachedMat('toilet_white', () => new THREE.MeshStandardMaterial({
-    color: 0xf0f0f0, roughness: 0.3,
+  // Shared materials for sanitary fixtures
+  const ceramicMat = getCachedMat('ceramic_white', () => new THREE.MeshStandardMaterial({
+    color: 0xf2f2f0, roughness: 0.15, metalness: 0.02,
+    envMap, envMapIntensity: 0.3,
+  }));
+  const chromeMat = getCachedMat('chrome', () => new THREE.MeshStandardMaterial({
+    color: 0xcccccc, metalness: 0.9, roughness: 0.05,
+    envMap, envMapIntensity: 0.6,
+  }));
+  const wcMirrorMat = getCachedMat('mirror', () => new THREE.MeshStandardMaterial({
+    color: 0xaabbcc, roughness: 0.02, metalness: 0.8, envMap, envMapIntensity: 1.0,
   }));
   const stallWallMat = getCachedMat('stall_wall', () => new THREE.MeshStandardMaterial({
     color: 0xcccccc, roughness: 0.6,
   }));
+
+  // 3 toilet stalls along west wall
   for (let si = 0; si < 3; si++) {
     const sz = wcZ - 2 + si * 2;
-    // Stall partition wall
     if (si > 0) {
       group.add(makeBox(1.8, 1.8, 0.08, stallWallMat, wcX - 1, 1.1, sz - 1));
     }
-    // Toilet bowl (procedural: base box + seat + tank)
-    const tx = wcX - 1.5;
-    group.add(makeBox(0.45, 0.38, 0.55, toiletMat, tx, 0.34, sz));     // bowl
-    group.add(makeBox(0.4, 0.5, 0.2, toiletMat, tx, 0.4, sz - 0.35));  // tank
-    group.add(makeBox(0.42, 0.04, 0.4, toiletMat, tx, 0.55, sz + 0.05)); // seat
-    // Flush handle
-    group.add(makeBox(0.08, 0.12, 0.04, getCachedMat('chrome', () => new THREE.MeshStandardMaterial({
-      color: 0xcccccc, metalness: 0.8, roughness: 0.1,
-    })), tx + 0.22, 0.55, sz - 0.3));
+    createToilet(group, wcX - 1.5, 0, sz, ceramicMat, chromeMat);
   }
 
   // 2 sinks along east wall of WC
   for (let si = 0; si < 2; si++) {
     const sz = wcZ - 1 + si * 2;
-    const sx = wcX + 2;
-    // Sink basin
-    group.add(makeBox(0.6, 0.1, 0.45, toiletMat, sx, 0.85, sz));
-    // Pedestal
-    group.add(makeBox(0.15, 0.85, 0.15, toiletMat, sx, 0.43, sz));
-    // Faucet
-    group.add(makeBox(0.06, 0.2, 0.06, getCachedMat('chrome', () => new THREE.MeshStandardMaterial({
-      color: 0xcccccc, metalness: 0.8, roughness: 0.1,
-    })), sx, 1.0, sz - 0.15));
-    // Mirror
-    group.add(makeBox(0.5, 0.7, 0.04, getCachedMat('mirror', () => new THREE.MeshStandardMaterial({
-      color: 0xaabbcc, roughness: 0.02, metalness: 0.8, envMap, envMapIntensity: 1.0,
-    })), sx, 1.5, sz - 0.35));
+    createSink(group, wcX + 2, 0, sz, ceramicMat, chromeMat, wcMirrorMat);
   }
 
   // WC light
@@ -1116,9 +1275,9 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
     { x: 0, z: D / 2 - 6, int: 3.5 },     // restaurant
   ];
   for (const lp of lightPositions) {
-    const pl = new THREE.PointLight(0xfff0dd, lp.int * 10, 45);
+    const pl = new THREE.PointLight(0xfff0dd, lp.int, 45);
     pl.position.set(lp.x, H - 1.5, lp.z);
-    pl._dayIntensity = lp.int * 10;
+    pl._dayIntensity = lp.int;
     group.add(pl);
     lobbyLights.push(pl);
     // Ceiling panel above
@@ -1164,7 +1323,7 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
   // === CEILING ===
   const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W - 4, D - 2), ceilMat);
   ceil.rotation.x = Math.PI / 2;
-  ceil.position.set(0, y + H - 0.05, 0);
+  ceil.position.set(0, y + H - 0.15, 0);
   group.add(ceil);
 
   // === HALLWAY (north side, 3m wide) ===
@@ -1181,9 +1340,9 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
   for (let hx = -W / 4; hx <= W / 4; hx += W / 4) {
     group.add(makeBox(2, 0.04, 1, ceilPanelMat, hx, y + H - 0.1, hallZ));
   }
-  const hallLight = new THREE.PointLight(0xfff5e0, 8, 30);
+  const hallLight = new THREE.PointLight(0xfff5e0, 1.5, 30);
   hallLight.position.set(0, y + H - 1.5, hallZ);
-  hallLight._dayIntensity = 8;
+  hallLight._dayIntensity = 1.5;
   group.add(hallLight);
   lobbyLights.push(hallLight);
 
@@ -1191,8 +1350,9 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
   const roomCount = 4;
   const usableW = W - 16; // minus lift (8m) + stairs (8m)
   const roomW = usableW / roomCount;
-  const roomD = D - hallD - 5; // depth from hallway to south wall
+  const roomD = D - hallD - 3.5; // depth: rooms extend to near south wall (balcony door aligns with exterior)
   const roomStartX = -W / 2 + 8; // after lift shaft
+  const ubx = _currentBuildingX, ubz = _currentBuildingZ; // world offset for colliders
 
   for (let r = 0; r < roomCount; r++) {
     const rx = roomStartX + r * roomW + roomW / 2;
@@ -1201,15 +1361,18 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
     const doorH2 = 2.2;
     const wallH2 = H - 0.5;
 
-    // Room partition walls
+    // Room partition walls (with collision)
     if (r > 0) {
       group.add(makeBox(0.15, wallH2, roomD + 1, damaskMat, rx - roomW / 2, y + wallH2 / 2, rz));
+      addCollider(ubx + rx - roomW / 2, ubz + rz, 0.3, roomD + 1, y + wallH2, y);
     }
 
     // North wall (hallway side) with door opening
-    const nwSegW = (roomW - doorW2) / 2 - 0.2;
+    const nwSegW = (roomW - doorW2) / 2 - 0.6; // wider gap for player radius (0.4m)
     group.add(makeBox(nwSegW, wallH2, 0.15, damaskMat, rx - roomW / 2 + nwSegW / 2 + 0.1, y + wallH2 / 2, hallZ + hallD / 2));
+    addCollider(ubx + rx - roomW / 2 + nwSegW / 2 + 0.1, ubz + hallZ + hallD / 2, nwSegW, 0.3, y + wallH2, y);
     group.add(makeBox(nwSegW, wallH2, 0.15, damaskMat, rx + roomW / 2 - nwSegW / 2 - 0.1, y + wallH2 / 2, hallZ + hallD / 2));
+    addCollider(ubx + rx + roomW / 2 - nwSegW / 2 - 0.1, ubz + hallZ + hallD / 2, nwSegW, 0.3, y + wallH2, y);
     group.add(makeBox(doorW2 + 0.2, wallH2 - doorH2, 0.15, damaskMat, rx, y + doorH2 + (wallH2 - doorH2) / 2, hallZ + hallD / 2));
     // Door frame
     group.add(makeBox(0.08, doorH2, 0.2, doorFrameMat, rx - doorW2 / 2, y + doorH2 / 2, hallZ + hallD / 2));
@@ -1566,7 +1729,7 @@ function _old_createLobbyInterior(group, width, depth, floorH, name) {
   const ceilingGeo = new THREE.PlaneGeometry(width - 1, depth - 1);
   const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
   ceiling.rotation.x = Math.PI / 2; // face down
-  ceiling.position.set(0, floorH - 0.05, 0);
+  ceiling.position.set(0, floorH - 0.15, 0);
   ceiling.receiveShadow = true;
   group.add(ceiling);
 
@@ -1763,7 +1926,7 @@ function _old_createLobbyInterior(group, width, depth, floorH, name) {
     color: 0xddcc88, metalness: 0.6, roughness: 0.2,
   }));
   const chandelierGlow = new THREE.MeshStandardMaterial({
-    color: 0xffffee, emissive: 0xffffcc, emissiveIntensity: 1.5,
+    color: 0xffffee, emissive: 0xffffcc, emissiveIntensity: 0.8,
   });
   // Main ring
   const ring = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.06, 8, 16), chandelierMat);
@@ -1874,9 +2037,9 @@ function _old_createLobbyInterior(group, width, depth, floorH, name) {
   ];
   for (const lg of lightGrid) {
     // PointLight as pendant lamp (1.5m below ceiling for proper light distribution)
-    const pl = new THREE.PointLight(0xfff0dd, lg.int * 5, 45);
+    const pl = new THREE.PointLight(0xfff0dd, lg.int, 45);
     pl.position.set(lg.x, floorH - 1.5, lg.z);
-    pl._dayIntensity = lg.int * 5;
+    pl._dayIntensity = lg.int;
     group.add(pl);
     lobbyLights.push(pl);
     // Emissive ceiling panel (stays at ceiling)
@@ -1895,7 +2058,7 @@ function _old_createLobbyInterior(group, width, depth, floorH, name) {
 
   // Wall sconces (emissive visual)
   const sconceMat = getCachedMat('sconce', () => new THREE.MeshStandardMaterial({
-    color: 0xffe8c8, emissive: 0xffd8a0, emissiveIntensity: 1.5, roughness: 0.3,
+    color: 0xffe8c8, emissive: 0xffd8a0, emissiveIntensity: 0.6, roughness: 0.3,
   }));
   const sconceBackMat = getCachedMat('sconce_back', () =>
     new THREE.MeshStandardMaterial({ color: 0x3a3a3a, metalness: 0.3, roughness: 0.4 }));
@@ -1959,7 +2122,7 @@ function createSecondFloor(group, width, depth, floorH, name) {
   const ceilMat = getCachedMat('ceiling', () => new THREE.MeshStandardMaterial({ color: 0xf5f0e8, roughness: 0.9, side: THREE.DoubleSide }));
   const ceil2 = new THREE.Mesh(new THREE.PlaneGeometry(width - 2, floor2Depth), ceilMat);
   ceil2.rotation.x = Math.PI / 2;
-  ceil2.position.set(0, y + floorH - 0.1, floor2Z);
+  ceil2.position.set(0, y + floorH - 0.15, floor2Z);
   group.add(ceil2);
 
   // === HALLWAY (runs east-west along the center) ===
@@ -1976,16 +2139,16 @@ function createSecondFloor(group, width, depth, floorH, name) {
 
   // Hallway ceiling light panels (emissive, no PointLight needed)
   const hallPanelMat = getCachedMat('ceil_panel', () => new THREE.MeshStandardMaterial({
-    color: 0xfff8f0, emissive: 0xfff5e8, emissiveIntensity: 1.8, roughness: 0.3,
+    color: 0xfff8f0, emissive: 0xfff5e8, emissiveIntensity: 0.7, roughness: 0.3,
     side: THREE.DoubleSide,
   }));
   for (let hx = -hallW / 3; hx <= hallW / 3; hx += hallW / 3) {
     group.add(makeBox(3, 0.05, 1.2, hallPanelMat, hx, y + floorH - 0.12, hallZ));
   }
   // Single PointLight for depth
-  const hl = new THREE.PointLight(0xfff5e0, 5.0, 25);
+  const hl = new THREE.PointLight(0xfff5e0, 1.0, 25);
   hl.position.set(0, y + floorH - 1.5, hallZ);
-  hl._dayIntensity = 5.0;
+  hl._dayIntensity = 1.0;
   lobbyLights.push(hl);
   group.add(hl);
 
@@ -2061,7 +2224,7 @@ function createSecondFloor(group, width, depth, floorH, name) {
 
     // Room ceiling light panel (larger emissive area for better illumination)
     const ceilLampMat = getCachedMat('ceillamp', () => new THREE.MeshStandardMaterial({
-      color: 0xfff8f0, emissive: 0xfff0dd, emissiveIntensity: 1.5,
+      color: 0xfff8f0, emissive: 0xfff0dd, emissiveIntensity: 0.5,
       side: THREE.DoubleSide,
     }));
     group.add(makeBox(1.5, 0.04, 1.5, ceilLampMat, rx, y + floorH - 0.15, roomZ));
@@ -2084,24 +2247,18 @@ function createSecondFloor(group, width, depth, floorH, name) {
       group.add(makeBox(0.12, wallH, bathD, wallRoomMat, bathX + bathW / 2, y + wallH / 2, bathZ));
       // Bathroom door opening (just leave gap, no wall on hall side)
 
-      // Toilet
-      const toiletMat = getCachedMat('toilet', () => new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.3 }));
-      // Bowl
-      group.add(makeBox(0.45, 0.4, 0.55, toiletMat, bathX - 0.5, y + 0.2, bathZ - 0.5));
-      // Tank
-      group.add(makeBox(0.4, 0.5, 0.2, toiletMat, bathX - 0.5, y + 0.35, bathZ - 0.85));
-      // Seat
-      group.add(makeBox(0.42, 0.04, 0.4, toiletMat, bathX - 0.5, y + 0.42, bathZ - 0.45));
-
-      // Sink
-      group.add(makeBox(0.6, 0.1, 0.45, toiletMat, bathX + 0.5, y + 0.8, bathZ - 0.8));
-      // Sink pedestal
-      group.add(makeBox(0.15, 0.8, 0.15, toiletMat, bathX + 0.5, y + 0.4, bathZ - 0.8));
-      // Mirror above sink
-      const mirrorMat = getCachedMat('mirror', () => new THREE.MeshStandardMaterial({
+      // Toilet + Sink (detailed LatheGeometry models)
+      const ceramicM = getCachedMat('ceramic_white', () => new THREE.MeshStandardMaterial({
+        color: 0xf2f2f0, roughness: 0.15, metalness: 0.02, envMap, envMapIntensity: 0.3,
+      }));
+      const chromeM = getCachedMat('chrome', () => new THREE.MeshStandardMaterial({
+        color: 0xcccccc, metalness: 0.9, roughness: 0.05, envMap, envMapIntensity: 0.6,
+      }));
+      const mirrorM = getCachedMat('mirror', () => new THREE.MeshStandardMaterial({
         color: 0xaabbcc, roughness: 0.02, metalness: 0.8, envMap, envMapIntensity: 1.0,
       }));
-      group.add(makeBox(0.6, 0.8, 0.04, mirrorMat, bathX + 0.5, y + 1.6, bathZ - 0.97));
+      createToilet(group, bathX - 0.5, y, bathZ - 0.5, ceramicM, chromeM);
+      createSink(group, bathX + 0.5, y, bathZ - 0.8, ceramicM, chromeM, mirrorM);
 
       // Bathroom floor tile (different from main floor)
       const bathFloorMat = getCachedMat('bathfloor', () => new THREE.MeshStandardMaterial({
@@ -2139,10 +2296,18 @@ function registerStairFloors(x, z, width, depth, floorH) {
     addFloor(stairX, stairStartZ + stairD + 0.5, stairW + 2, 3, (flight + 1) * floorH);
   }
 
+  // Ground floor (EG) walkable surface
+  addFloor(x, z, width - 2, depth - 2, 0);
   // Floor slabs for 1.OG and 2.OG (full width except stairwell)
   for (let fl = 1; fl <= 2; fl++) {
     addFloor(x, z, width - 8, depth - 4, fl * floorH);
   }
+
+  // Stairwell wall colliders (west + south enclosing stairs, NOT blocking the north entrance)
+  // West wall: exactly stairD depth, aligned with stair area (no overextension)
+  addCollider(stairX - stairW / 2 - 0.1, stairStartZ + stairD / 2, 0.3, stairD);
+  // South wall: blocks walking past the stairs into the void
+  addCollider(stairX, stairStartZ + stairD + 1, stairW + 0.5, 0.3);
 }
 
 // ---------------------------------------------------------------------------
@@ -2283,7 +2448,8 @@ function getPoolNormals() {
 }
 
 let poolWaterCount = 0;
-const MAX_REFLECTIVE_POOLS = 0; // All pools use env-map reflection (no planar reflection)
+const MAX_REFLECTIVE_POOLS = 2; // Allow up to 2 large pools to use planar Water reflections
+const animatedPoolMats = []; // pool materials with animated normals
 
 function createPool(scene, x, z, w, d) {
   const isLarge = (w * d > 800) && poolWaterCount < MAX_REFLECTIVE_POOLS;
@@ -2296,25 +2462,31 @@ function createPool(scene, x, z, w, d) {
       sunDirection: new THREE.Vector3(100, 120, 80).normalize(),
       sunColor: 0xffffff,
       waterColor: 0x006994,
-      distortionScale: 1.2,  // more wave distortion for realistic reflections
+      distortionScale: 1.5,
       fog: false, alpha: 0.92,
     });
-    waterSurface.material.uniforms['size'].value = 0.15; // finer micro-waves
+    waterSurface.material.uniforms['size'].value = 0.2;
     waterSurface.rotation.x = -Math.PI / 2;
     waterSurface.position.set(x, 0.35, z);
     scene.add(waterSurface);
     waterMeshes.push(waterSurface);
     registerSpatial(waterSurface);
   } else {
-    // All other pools: nice-looking env-mapped material (no planar reflection)
-    const poolMat = getCachedMat('pool_envmap', () => new THREE.MeshStandardMaterial({
-      color: 0x1a99b5, roughness: 0.05, metalness: 0.15,
-      transparent: true, opacity: 0.88,
-      envMap, envMapIntensity: 1.0,
-    }));
+    // Env-mapped pool with animated normal map for wave motion
+    const normals = getPoolNormals().clone();
+    normals.wrapS = THREE.RepeatWrapping;
+    normals.wrapT = THREE.RepeatWrapping;
+    const poolMat = new THREE.MeshStandardMaterial({
+      color: 0x1a99b5, roughness: 0.08, metalness: 0.2,
+      transparent: true, opacity: 0.85,
+      envMap, envMapIntensity: 0.8,
+      normalMap: normals,
+      normalScale: new THREE.Vector2(0.6, 0.6),
+    });
     const waterMesh = makePlane(w, d, poolMat, x, 0.35, z);
     scene.add(waterMesh);
     registerSpatial(waterMesh);
+    animatedPoolMats.push(poolMat);
   }
 
   // Pool floor (visible through water – light blue tiles)
@@ -2429,13 +2601,11 @@ function createWaterSlide(scene, x, z, height, colors) {
   scene.add(group);
   registerSpatial(group);
 
-  // No full-block collider – player can walk in and climb stairs!
-  // Only platform railing colliders at the top edges
   // Platform railing colliders – only block at platform height, not at ground
-  addCollider(x + 4, z, 0.3, 8, height + 1.2);
-  addCollider(x - 4, z, 0.3, 8, height + 1.2);
-  addCollider(x, z + 4, 8, 0.3, height + 1.2);
-  addCollider(x, z - 4, 8, 0.3, height + 1.2);
+  addCollider(x + 4, z, 0.3, 8, height + 1.2, height - 1);
+  addCollider(x - 4, z, 0.3, 8, height + 1.2, height - 1);
+  addCollider(x, z + 4, 8, 0.3, height + 1.2, height - 1);
+  addCollider(x, z - 4, 8, 0.3, height + 1.2, height - 1);
 
   // Register stair steps as walkable floors (world coordinates)
   // Use fewer, larger step-zones (merge every 2 steps) to reduce floor count
@@ -2531,7 +2701,8 @@ function createParasol(scene, x, z, color = 0xe8d8b8) {
 function createAmphitheater(scene, x, z, rotation = 0, size = 'small') {
   const isLarge = size === 'large';
   const group = new THREE.Group();
-  group.position.set(x, 0, z);
+  const groundY = getTerrainY(x, z);
+  group.position.set(x, groundY, z);
   group.rotation.y = rotation;
 
   // === MEGA STAGE DIMENSIONS ===
@@ -2695,7 +2866,7 @@ function createAmphitheater(scene, x, z, rotation = 0, size = 'small') {
       const r = (innerR + outerR) / 2;
       dummy.position.set(
         Math.cos(angle) * r,
-        0.3 + tier * 0.5 + 0.05, // sit directly on the tier surface (0.05m above ring)
+        0.3 + tier * 0.5 + 0.25, // chair bottom on tier (box center = half-height above surface)
         stageD / 2 + 2 + tier * tierSpacing + Math.sin(angle) * r * 0.05
       );
       dummy.rotation.y = angle + Math.PI / 2;
@@ -2708,9 +2879,9 @@ function createAmphitheater(scene, x, z, rotation = 0, size = 'small') {
 
   scene.add(group);
   registerSpatial(group);
-  // Stage: jumpable collider + walkable floor on top
-  addCollider(x, z, stageW, stageD, stageH);
-  addFloor(x, z, stageW + 2, stageD + 2, stageH);
+  // Stage: jumpable collider + walkable floor on top (account for terrain height)
+  addCollider(x, z, stageW, stageD, groundY + stageH);
+  addFloor(x, z, stageW + 2, stageD + 2, groundY + stageH);
   // Backdrop wall collider (prevents walking through the screen)
   addCollider(x, z - stageD / 2, stageW, 0.5);
   // No seat collider – player can walk freely between seats and jump on stage
@@ -3500,10 +3671,21 @@ class FPSController {
 
     if (move.lengthSq() > 0) move.normalize().multiplyScalar(speed);
 
-    const nx = this.camera.position.x + move.x, nz = this.camera.position.z + move.z;
+    // Substep collision to prevent tunneling through thin walls
     const py = this.camera.position.y;
-    if (!checkCollision(nx, this.camera.position.z, py)) this.camera.position.x = nx;
-    if (!checkCollision(this.camera.position.x, nz, py)) this.camera.position.z = nz;
+    const stepSize = 0.3; // max 0.3m per substep
+    const steps = Math.max(1, Math.ceil(Math.max(Math.abs(move.x), Math.abs(move.z)) / stepSize));
+    const sx = move.x / steps, sz = move.z / steps;
+    for (let s = 0; s < steps; s++) {
+      const nx = this.camera.position.x + sx;
+      if (!checkCollision(nx, this.camera.position.z, py)) this.camera.position.x = nx;
+      else break;
+    }
+    for (let s = 0; s < steps; s++) {
+      const nz = this.camera.position.z + sz;
+      if (!checkCollision(this.camera.position.x, nz, py)) this.camera.position.z = nz;
+      else break;
+    }
 
     // Floor height detection (terrain + stairs + upper floors)
     const terrainY = getTerrainYCached(this.camera.position.x, this.camera.position.z);
@@ -3626,6 +3808,7 @@ function init() {
   }
   window.__checkCollision = checkCollision;
   window.__colliders = colliders;
+  window.__dynamicColliders = dynamicColliders;
   window.__colGrid = _colGrid;
   window.__scene = scene;
   window.__floors = floors;
@@ -3656,7 +3839,7 @@ function init() {
     for (const c of cloudSprites) c.sprite.visible = true;
     if (window.__moonMesh) window.__moonMesh.visible = false;
     // Interior lights: always same brightness (day level)
-    for (const ll of lobbyLights) ll.intensity = ll._dayIntensity * 10;
+    for (const ll of lobbyLights) ll.intensity = ll._dayIntensity * 6;
     document.getElementById('btnDay').classList.add('active');
     document.getElementById('btnNight').classList.remove('active');
     // Regenerate envmap with day sky (delayed so shader updates first)
@@ -3681,7 +3864,7 @@ function init() {
     for (const c of cloudSprites) c.sprite.visible = false;
     if (window.__moonMesh) window.__moonMesh.visible = true;
     // Interior lights: MUCH brighter to compensate for no ambient/sun
-    for (const ll of lobbyLights) ll.intensity = ll._dayIntensity * 10;
+    for (const ll of lobbyLights) ll.intensity = ll._dayIntensity * 6;
     document.getElementById('btnNight').classList.add('active');
     document.getElementById('btnDay').classList.remove('active');
     // Regenerate envmap with night sky
@@ -3748,11 +3931,18 @@ function animate() {
     }
   }
 
-  // Water animation – update time for all, but stagger reflection updates
+  // Water animation – update time for reflective pools
   for (let i = 0; i < waterMeshes.length; i++) {
     const w = waterMeshes[i];
     const isSea = (i === waterMeshes.length - 1);
     w.material.uniforms['time'].value += dt * (isSea ? 0.6 : 0.15);
+  }
+  // Animate normal map offset for env-mapped pools (subtle wave motion)
+  if (frameCount % 2 === 0) {
+    for (const pm of animatedPoolMats) {
+      pm.normalMap.offset.x += dt * 0.015;
+      pm.normalMap.offset.y += dt * 0.008;
+    }
   }
 
   // Auto-doors (check every 3rd frame for performance)
@@ -3782,81 +3972,126 @@ function animate() {
       const t = elapsedTime;
       const pattern = window.__screenPattern % 8;
 
-      // Dark background
-      ctx.fillStyle = '#0a0a15';
+      // Dark background (near black)
+      ctx.fillStyle = '#060612';
       ctx.fillRect(0, 0, w, h);
 
+      // DFW (large) = warm colors (orange/pink/gold), DWW (small) = cool colors (blue/cyan/teal)
+      const warm = sc.isLarge;
+      const cx = w / 2, cy = h / 2;
+
       switch (pattern) {
-        case 0: // Scrolling hotel name
-          ctx.font = 'bold 48px sans-serif';
-          ctx.fillStyle = `hsl(${(t * 20) % 360}, 100%, 60%)`;
-          const text0 = sc.isLarge ? 'DREAM FUN WORLD' : 'DREAM WATER WORLD';
-          ctx.fillText(text0, w - ((t * 80) % (w + 600)) + 300, h / 2 + 16);
-          break;
-        case 1: // Stars pattern
-          for (let i = 0; i < 30; i++) {
-            const sx = (i * 137.5 + t * 20) % w;
-            const sy = (i * 89.3 + Math.sin(t + i) * 15) % h;
-            const sr = 2 + Math.sin(t * 3 + i) * 2;
-            ctx.fillStyle = `hsl(${(i * 40 + t * 50) % 360}, 100%, 70%)`;
-            ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill();
+        case 0: { // Centered pulsing rings
+          for (let i = 5; i >= 0; i--) {
+            const r = 15 + i * 12 + Math.sin(t * 2 + i * 0.7) * 6;
+            const alpha = 0.4 + Math.sin(t * 3 + i) * 0.2;
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.strokeStyle = warm
+              ? `rgba(255,${120 + i * 20},${50 + i * 10},${alpha})`
+              : `rgba(${50 + i * 10},${150 + i * 15},255,${alpha})`;
+            ctx.lineWidth = 2; ctx.stroke();
           }
           break;
-        case 2: // Water waves
-          for (let y = 0; y < h; y += 4) {
-            const hue = (y / h * 180 + t * 30) % 360;
-            ctx.strokeStyle = `hsl(${hue}, 80%, ${30 + Math.sin(y * 0.1 + t * 2) * 20}%)`;
-            ctx.lineWidth = 3;
+        }
+        case 1: { // Floating stars (small, centered cluster)
+          for (let i = 0; i < 20; i++) {
+            const a = (i / 20) * Math.PI * 2 + t * 0.5;
+            const r = 20 + Math.sin(t + i * 1.3) * 18;
+            const sx = cx + Math.cos(a) * r;
+            const sy = cy + Math.sin(a) * r * 0.5;
+            const size = 1.5 + Math.sin(t * 3 + i) * 1;
+            ctx.fillStyle = warm
+              ? `hsl(${30 + i * 5}, 100%, ${60 + Math.sin(t * 2 + i) * 15}%)`
+              : `hsl(${190 + i * 5}, 90%, ${55 + Math.sin(t * 2 + i) * 15}%)`;
+            ctx.beginPath(); ctx.arc(sx, sy, size, 0, Math.PI * 2); ctx.fill();
+          }
+          break;
+        }
+        case 2: { // Geometric diamond rotation
+          ctx.save(); ctx.translate(cx, cy);
+          for (let i = 0; i < 6; i++) {
+            ctx.rotate(t * 0.3 + i * Math.PI / 3);
+            const s = 10 + i * 8 + Math.sin(t * 2) * 3;
+            ctx.strokeStyle = warm
+              ? `rgba(255,${100 + i * 25},${30 + i * 10},0.6)`
+              : `rgba(${30 + i * 10},${160 + i * 15},255,0.6)`;
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(-s / 2, -s / 2, s, s);
+          }
+          ctx.restore();
+          break;
+        }
+        case 3: { // Sine wave pattern (centered, not full-screen)
+          ctx.strokeStyle = warm ? '#ff6633' : '#3388ff';
+          ctx.lineWidth = 2;
+          for (let line = -2; line <= 2; line++) {
             ctx.beginPath();
-            for (let x = 0; x < w; x += 3) ctx.lineTo(x, y + Math.sin(x * 0.02 + t * 2 + y * 0.05) * 8);
+            for (let x = cx - 180; x < cx + 180; x += 3) {
+              const dx = (x - cx) / 180;
+              const env = 1 - dx * dx; // fade at edges
+              ctx.lineTo(x, cy + line * 12 + Math.sin(dx * 8 + t * 3 + line) * 15 * env);
+            }
+            ctx.globalAlpha = 0.4 + line * 0.1;
             ctx.stroke();
           }
+          ctx.globalAlpha = 1;
           break;
-        case 3: // Color blocks (checkerboard)
-          const bs = 32;
-          for (let by = 0; by < h; by += bs) {
-            for (let bx2 = 0; bx2 < w; bx2 += bs) {
-              ctx.fillStyle = `hsl(${(bx2 + by + t * 60) % 360}, 90%, 45%)`;
-              ctx.fillRect(bx2, by, bs - 2, bs - 2);
-            }
-          }
-          break;
-        case 4: // Fire effect
-          for (let x = 0; x < w; x += 4) {
-            const fh = (Math.sin(x * 0.05 + t * 5) * 0.5 + 0.5) * h * 0.7;
-            const grad = ctx.createLinearGradient(x, h, x, h - fh);
-            grad.addColorStop(0, '#ff4400'); grad.addColorStop(0.5, '#ffaa00'); grad.addColorStop(1, '#ffff44');
-            ctx.fillStyle = grad; ctx.fillRect(x, h - fh, 4, fh);
-          }
-          break;
-        case 5: // Big "WELCOME" text
-          ctx.font = 'bold 64px sans-serif';
+        }
+        case 4: { // Pulsing hotel name (centered, subtle glow)
+          const name = sc.isLarge ? 'DREAM FUN WORLD' : 'DREAM WATER WORLD';
+          ctx.font = 'bold 36px sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillStyle = `hsl(${(t * 40) % 360}, 100%, 60%)`;
-          ctx.fillText('WELCOME', w / 2, h / 2 + 20);
+          const glow = 0.5 + Math.sin(t * 2) * 0.3;
+          ctx.fillStyle = warm
+            ? `rgba(255,140,50,${glow})`
+            : `rgba(80,180,255,${glow})`;
+          ctx.fillText(name, cx, cy + 12);
           ctx.textAlign = 'left';
           break;
-        case 6: // Spinning spiral
-          ctx.translate(w / 2, h / 2);
-          for (let i = 0; i < 12; i++) {
-            const a = (i / 12) * Math.PI * 2 + t * 2;
-            ctx.fillStyle = `hsl(${i * 30 + t * 50}, 100%, 50%)`;
-            ctx.fillRect(Math.cos(a) * 40, Math.sin(a) * 30, 20, 10);
+        }
+        case 5: { // Rotating dot circle
+          for (let i = 0; i < 16; i++) {
+            const a = (i / 16) * Math.PI * 2 + t * 1.5;
+            const r = 30 + Math.sin(t * 2 + i * 0.5) * 8;
+            const dotR = 3 + Math.sin(t * 4 + i) * 1.5;
+            ctx.fillStyle = warm
+              ? `hsl(${(i * 22 + 10) % 60}, 100%, ${50 + Math.sin(t + i) * 15}%)`
+              : `hsl(${(i * 22 + 180) % 240 + 160}, 80%, ${45 + Math.sin(t + i) * 15}%)`;
+            ctx.beginPath();
+            ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.6, dotR, 0, Math.PI * 2);
+            ctx.fill();
           }
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
           break;
-        case 7: // Rainbow gradient sweep
-          const rg = ctx.createLinearGradient(0, 0, w, 0);
-          for (let s = 0; s <= 1; s += 0.1) {
-            rg.addColorStop(s, `hsl(${(s * 360 + t * 60) % 360}, 100%, 50%)`);
+        }
+        case 6: { // Particle fountain (centered, upward motion)
+          for (let i = 0; i < 25; i++) {
+            const age = (t * 0.8 + i * 0.2) % 2;
+            const px = cx + Math.sin(i * 2.7 + t * 0.3) * age * 40;
+            const py = cy + 30 - age * 50;
+            const alpha = Math.max(0, 1 - age * 0.6);
+            ctx.fillStyle = warm
+              ? `rgba(255,${160 - age * 60},${60 - age * 30},${alpha})`
+              : `rgba(${80 - age * 30},${200 - age * 40},255,${alpha})`;
+            ctx.beginPath(); ctx.arc(px, py, 2, 0, Math.PI * 2); ctx.fill();
           }
-          ctx.fillStyle = rg; ctx.fillRect(0, 0, w, h);
-          ctx.font = 'bold 40px sans-serif';
-          ctx.fillStyle = '#000';
+          break;
+        }
+        case 7: { // "WELCOME" with subtle star accent
+          ctx.font = 'bold 42px sans-serif';
           ctx.textAlign = 'center';
-          ctx.fillText(sc.isLarge ? 'FUN WORLD' : 'WATER WORLD', w / 2, h / 2 + 14);
+          const pulse = 0.6 + Math.sin(t * 1.5) * 0.2;
+          ctx.fillStyle = warm ? `rgba(255,200,100,${pulse})` : `rgba(100,200,255,${pulse})`;
+          ctx.fillText('WELCOME', cx, cy + 14);
+          // Small star accents
+          for (let i = 0; i < 6; i++) {
+            const sx = cx - 120 + i * 48;
+            const sy = cy - 25 + Math.sin(t * 2 + i) * 5;
+            ctx.fillStyle = warm ? `rgba(255,180,80,0.5)` : `rgba(100,180,255,0.5)`;
+            ctx.beginPath(); ctx.arc(sx, sy, 1.5, 0, Math.PI * 2); ctx.fill();
+          }
           ctx.textAlign = 'left';
           break;
+        }
       }
       sc.tex.needsUpdate = true;
     }
@@ -3881,13 +4116,13 @@ function animate() {
 
       if (inBuilding) {
         // Inside: show current floor + adjacent
-        const playerFloor = Math.max(0, Math.floor((py - PLAYER_HEIGHT + 1) / 6));
+        const playerFloor = Math.max(0, Math.round((py - PLAYER_HEIGHT) / 6));
         const floorDist = Math.abs(fg.floorNum - playerFloor);
         fg.group.visible = floorDist <= 1;
       } else {
         // Outside but near: show EG (visible through glass doors/windows)
         // Upper floors only visible if player Y is near that floor (balcony level)
-        const playerFloor = Math.max(0, Math.floor((py - PLAYER_HEIGHT + 1) / 6));
+        const playerFloor = Math.max(0, Math.round((py - PLAYER_HEIGHT) / 6));
         fg.group.visible = fg.floorNum === 0 || Math.abs(fg.floorNum - playerFloor) <= 1;
       }
     }
@@ -3963,9 +4198,10 @@ function animate() {
   renderer.info.autoReset = false;
   renderer.info.reset();
   // Sky dome follows camera exactly (prevent walking out of skydome)
+  // Y must track camera too – otherwise sky bleeds through ceilings (depthTest:false)
   if (skyMesh) {
     skyMesh.position.x = camera.position.x;
-    skyMesh.position.y = 0;
+    skyMesh.position.y = camera.position.y;
     skyMesh.position.z = camera.position.z;
   }
   if (window.__moonMesh && window.__moonMesh.visible) {
