@@ -2015,13 +2015,22 @@ function createLounger(scene, x, z, rotation = 0) {
   const group = new THREE.Group();
   group.position.set(x, 0, z);
   group.rotation.y = rotation;
-  group.add(makeBox(0.7, 0.05, 1.8, mat, 0, 0.4, 0));
-  const back = makeBox(0.7, 0.05, 0.6, mat, 0, 0.6, -0.7);
-  back.rotation.x = -0.5;
-  group.add(back);
-  // 2 legs instead of 4
-  group.add(makeBox(0.04, 0.4, 0.04, frameMat, -0.3, 0.2, 0));
-  group.add(makeBox(0.04, 0.4, 0.04, frameMat, 0.3, 0.2, 0));
+  // Frame rails (2 long metal bars)
+  group.add(makeBox(0.04, 0.06, 2.0, frameMat, -0.3, 0.35, 0));
+  group.add(makeBox(0.04, 0.06, 2.0, frameMat, 0.3, 0.35, 0));
+  // 4 legs
+  group.add(makeBox(0.04, 0.35, 0.04, frameMat, -0.3, 0.175, -0.85));
+  group.add(makeBox(0.04, 0.35, 0.04, frameMat, 0.3, 0.175, -0.85));
+  group.add(makeBox(0.04, 0.35, 0.04, frameMat, -0.3, 0.175, 0.85));
+  group.add(makeBox(0.04, 0.35, 0.04, frameMat, 0.3, 0.175, 0.85));
+  // Seat surface (flat section)
+  group.add(makeBox(0.65, 0.04, 1.3, mat, 0, 0.4, 0.3));
+  // Backrest (angled via a pivot group)
+  const backPivot = new THREE.Group();
+  backPivot.position.set(0, 0.4, -0.35);
+  backPivot.rotation.x = -0.45; // ~25° angle
+  backPivot.add(makeBox(0.65, 0.04, 0.7, mat, 0, 0.17, -0.15));
+  group.add(backPivot);
   scene.add(group);
   registerSpatial(group);
 }
@@ -2220,11 +2229,28 @@ function createAmphitheater(scene, x, z, rotation = 0, size = 'small') {
     group.add(chairs);
   }
 
+  // Stage access steps (front, 3 steps leading up)
+  const stepCount = 3;
+  const stepH2 = stageH / stepCount;
+  const stepD2 = 0.8;
+  const stepMat = getCachedMat('stage_step', () => new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.3 }));
+  for (let s = 0; s < stepCount; s++) {
+    const sy = (s + 0.5) * stepH2;
+    const stepZ = stageD / 2 + (stepCount - s) * stepD2;
+    group.add(makeBox(stageW * 0.4, stepH2, stepD2, stepMat, 0, sy, stepZ));
+  }
+
   scene.add(group);
   registerSpatial(group);
-  // Stage: jumpable collider + walkable floor on top (account for terrain height)
-  addCollider(x, z, stageW, stageD, groundY + stageH);
-  addFloor(x, z, stageW + 2, stageD + 2, groundY + stageH);
+
+  // Stage floor: walkable surface on top
+  addFloor(x, z, stageW + 2, stageD + 4, groundY + stageH);
+  // Stage steps: intermediate floors so player can walk up (each step < 1.5m tolerance)
+  for (let s = 0; s < stepCount; s++) {
+    addFloor(x, z + stageD / 2 + (stepCount - s) * stepD2, stageW * 0.4 + 1, stepD2 + 0.5, groundY + (s + 1) * stepH2);
+  }
+  // Stage sides: collider blocks walking through stage base (only below stage top)
+  addCollider(x, z, stageW, stageD, groundY + stageH, -1);
   // Backdrop wall collider (prevents walking through the screen)
   addCollider(x, z - stageD / 2, stageW, 0.5);
   // No seat collider – player can walk freely between seats and jump on stage
