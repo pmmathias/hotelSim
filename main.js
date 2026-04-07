@@ -979,7 +979,7 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   wall(wcX + wcW / 2, wcZ - wcD / 2 + wcEastSegD / 2, T, wcEastSegD, damaskMat);
   // WC door
   addAutoDoor(group, wcX + wcW / 2, 0, wcZ + wcD / 2 - 0.6, 1.2, 2.2, 'z', -1.5,
-    _currentBuildingX, _currentBuildingZ);
+    _currentBuildingX, _currentBuildingZ, { thinAxis: 'x' });
 
   // Shared ceramic/chrome materials for WC fixtures
   const ceramicMat = getCachedMat('ceramic_white', () => new THREE.MeshStandardMaterial({
@@ -1278,7 +1278,7 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
       group.add(makeBox(0.08, 2.2, 0.2, doorFrameMat, rx + doorW2 / 2, y + 1.1, hallEdge));
       // Auto-door
       addAutoDoor(group, rx, y, hallEdge, doorW2, 2.2, 'x', doorW2 + 0.3,
-        _currentBuildingX, _currentBuildingZ);
+        _currentBuildingX, _currentBuildingZ, { thinAxis: 'z' });
 
       // Room floor
       group.add(makePlane(roomW - 1, roomD2 - 1, laminateMat, rx, y + 0.2, rz));
@@ -1299,7 +1299,7 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
       if (isSouth) {
         const balcDoorZ = rz + roomD2 / 2 - 0.1;
         addAutoDoor(group, rx, y, balcDoorZ, 2.0, 2.2, 'x', 2.3,
-          _currentBuildingX, _currentBuildingZ);
+          _currentBuildingX, _currentBuildingZ, { thinAxis: 'z' });
         group.add(makeBox(2.0, 0.8, 0.08, glassMat2, rx, y + 2.6, balcDoorZ));
       }
 
