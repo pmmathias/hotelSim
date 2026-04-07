@@ -225,19 +225,21 @@ async function run() {
   // ═══════════════════════════════════════════════════════════════════════════
   console.log('\n══ COLLISION CHECKS ══');
 
-  // Interior partition: WC east wall (world: x=-119, z=-60)
-  await teleport(page, -120, 1.7, -60);
-  await look(page, 'east');
+  // Interior partition: Lobby/Service divider (horizontal wall dividing lobby from bar/restaurant)
+  // New layout: divZ = -D/2 + lobbyD = -17.5 + 19.25 = 1.75 → world: -60 + 1.75 = -58.25
+  await teleport(page, -70, 1.7, -59);
+  await look(page, 'south');
   await walk(page, 'w', 1500);
   p = await getPos(page);
-  ok('EG: WC east wall blocks', p.x < -118.5, `x=${p.x}`);
+  ok('EG: Lobby/service divider blocks', p.z < -57.5, `z=${p.z}`);
 
-  // Interior partition: Reception west wall (local recpX=37.5 → world x=-32.5)
-  await teleport(page, -34, 1.7, -75);
+  // Interior partition: Bar/Restaurant vertical divider
+  // barW = (W-16)*0.45 = 44.55, x = -W/2+8+barW = -49.5+44.55 = -4.95 → world: -70+(-4.95) = -74.95
+  await teleport(page, -76, 1.7, -55);
   await look(page, 'east');
   await walk(page, 'w', 1500);
   p = await getPos(page);
-  ok('EG: Reception wall blocks', p.x < -32, `x=${p.x}`);
+  ok('EG: Bar/Restaurant divider blocks', p.x < -74, `x=${p.x}`);
 
   // 1.OG room partition wall (between rooms, x ≈ -82.4 for room 1/2 boundary)
   // Room 0 rx=-37.125 → world -107.125, Room 1 rx=-12.375 → world -82.375

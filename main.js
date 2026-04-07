@@ -522,16 +522,17 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
   for (let f = 0; f < floors; f++) {
     for (let c = 0; c < cols; c++) {
       const bx = startX + c * (balconyW + 0.5);
-      const byVis = (f + 0.5) * floorH; // visual midpoint of each floor
-      const byFloor = f * floorH;     // walkable floor level (matches room floor)
+      // No balconies on ground floor (they appear inside the building at mid-height)
+      if (f === 0) continue;
 
-      // Skip balconies in the entrance zone (ground floor, center of building)
+      const byVis = f * floorH + 0.15; // balcony slab at floor level (not window midpoint)
+      const byFloor = f * floorH;       // walkable floor level
+
       const inEntranceX = Math.abs(bx) < (entranceW / 2 + balconyW / 2);
-      const isGroundFloor = f === 0;
 
       for (const faceSign of [1, -1]) { // +1=south, -1=north
-        // Skip ground-floor balconies over entrance openings
-        if (isGroundFloor && inEntranceX) continue;
+        // Skip balconies in entrance zone (upper floors still solid wall above entrance)
+        if (inEntranceX) continue;
 
         const fz_bal = faceSign * (depth / 2 + balconyD / 2);
         const fz_rail = faceSign * (depth / 2 + balconyD);
@@ -897,382 +898,237 @@ function createStaircase(group, W, D, H, marbleMat, damaskMat, ceilPanelMat) {
 }
 
 function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woodMat, accentMat, ceilPanelMat, isWater) {
+  // ═══════════════════════════════════════════════════════════════
+  // REALISTIC HOTEL GROUND FLOOR LAYOUT
+  // ═══════════════════════════════════════════════════════════════
+  //
+  // NORD (Straße, Eingang)
+  // ┌──────┬───────────────────────────────────┬──────────┐
+  // │ LIFT │          LOBBY                     │ TREPPE   │
+  // │      │   Sofas, Kronleuchter, Pflanzen    │          │
+  // │ WC   │   ──── Reception ────              │          │
+  // │      ├──────────────┬────────────────────┤          │
+  // │      │  BAR/LOUNGE  │   RESTAURANT       │          │
+  // │      │  Bartresen   │   Tische           │          │
+  // └──────┴──────────────┴────────────────────┴──────────┘
+  // SÜD (Pool)
+  //
   const y = 0;
+  const bx = _currentBuildingX, bz = _currentBuildingZ;
 
-  // === FLOOR (marble) ===
+  // Layout constants
+  const liftW2 = 4, liftD2 = 4;                     // lift shaft area
+  const stairArea = 5;                                // stairwell buffer
+  const sideW = 8;                                    // width reserved for lift/stair sides
+  const lobbyD = D * 0.55;                            // lobby takes 55% of depth (north)
+  const serviceD = D - lobbyD;                        // bar/restaurant (south)
+  const wcW = 8, wcD = 6;                             // WC dimensions
+
+  // === FLOOR + CEILING ===
   const floorBox = makeBox(W - 1, 0.3, D - 1, marbleMat, 0, 0.15, 0);
   floorBox.receiveShadow = true;
   group.add(floorBox);
-
-  // === CEILING ===
   const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W - 1, D - 1), ceilMat);
   ceil.rotation.x = Math.PI / 2;
-  ceil.position.set(0, H - 0.15, 0); // just below the floor slab (slab bottom at H-0.125)
+  ceil.position.set(0, H - 0.15, 0);
   group.add(ceil);
 
-  // === INTERIOR WALLS (Damask on all 4 sides) ===
-  const panelH = H - 0.8;
-  const panelY = panelH / 2 + 0.4;
-  // South wall (0.35m inside exterior wall inner face to avoid Z-fighting)
-  group.add(makeBox(W - 2, panelH, 0.06, damaskMat, 0, panelY, D / 2 - 0.6));
-  // North wall (left + right of entrance, 12m gap)
-  const northPanelW = (W - 14) / 2;
-  group.add(makeBox(northPanelW, panelH, 0.06, damaskMat, -(northPanelW / 2 + 7), panelY, -(D / 2 - 0.6)));
-  group.add(makeBox(northPanelW, panelH, 0.06, damaskMat, (northPanelW / 2 + 7), panelY, -(D / 2 - 0.6)));
-  // East wall
-  group.add(makeBox(0.06, panelH, D - 2, damaskMat, W / 2 - 0.6, panelY, 0));
-  // West wall
-  group.add(makeBox(0.06, panelH, D - 2, damaskMat, -(W / 2 - 0.6), panelY, 0));
+  // Helper: add wall + collider in one call (LOCAL coords → world via bx/bz)
+  function wall(wx, wz, ww, wd, mat, label) {
+    group.add(makeBox(ww, H, wd, mat || damaskMat, wx, H / 2, wz));
+    addCollider(bx + wx, bz + wz, ww, wd);
+  }
 
-  // === ACCENT STRIP (bottom of south wall) ===
-  group.add(makeBox(W - 2, 0.6, 0.07, accentMat, 0, 0.3, D / 2 - 0.65));
+  // === PARTITION: Lobby/Service divider (horizontal, across building) ===
+  // lobbyD from north, serviceD from south
+  const divZ = -D / 2 + lobbyD; // divider Z position
+  // Two segments with 4m opening in center
+  const divSegW = (W - sideW * 2 - 4) / 2;
+  wall(-(divSegW / 2 + 2 + sideW / 2), divZ, divSegW, T, damaskMat);
+  wall((divSegW / 2 + 2 + sideW / 2), divZ, divSegW, T, damaskMat);
 
-  // === PARTITION WALLS (with collision) ===
-  const bx = _currentBuildingX, bz = _currentBuildingZ; // world offset for colliders
-  // Lift room east wall
+  // === PARTITION: Bar | Restaurant divider (vertical, south half) ===
+  const barW = (W - sideW * 2) * 0.45; // bar = 45% of center
+  const restW = (W - sideW * 2) - barW; // restaurant = 55%
+  const barCenterX = -W / 2 + sideW + barW / 2;
+  const restCenterX = -W / 2 + sideW + barW + restW / 2;
+  const serviceZ = divZ + serviceD / 2; // center of service area
+  wall(-W / 2 + sideW + barW, serviceZ, T, serviceD - 1, damaskMat);
+
+  // === WC ROOM (northwest, next to lift) ===
+  const wcX = -W / 2 + sideW / 2;
+  const wcZ = -D / 2 + lobbyD / 2 + 2;
+  // WC south wall
+  wall(wcX, wcZ + wcD / 2, wcW, T, damaskMat);
+  // WC east wall (with 1.2m door opening at south end)
+  const wcEastSegD = wcD - 1.5;
+  wall(wcX + wcW / 2, wcZ - wcD / 2 + wcEastSegD / 2, T, wcEastSegD, damaskMat);
+  // WC door
+  addAutoDoor(group, wcX + wcW / 2, 0, wcZ + wcD / 2 - 0.6, 1.2, 2.2, 'z', -1.5,
+    _currentBuildingX, _currentBuildingZ);
+
+  // Shared ceramic/chrome materials for WC fixtures
+  const ceramicMat = getCachedMat('ceramic_white', () => new THREE.MeshStandardMaterial({
+    color: 0xf2f2f0, roughness: 0.15, metalness: 0.02, envMap, envMapIntensity: 0.3,
+  }));
+  const chromeMat = getCachedMat('chrome', () => new THREE.MeshStandardMaterial({
+    color: 0xcccccc, metalness: 0.9, roughness: 0.05, envMap, envMapIntensity: 0.6,
+  }));
+  const wcMirrorMat = getCachedMat('mirror', () => new THREE.MeshStandardMaterial({
+    color: 0xaabbcc, roughness: 0.02, metalness: 0.8, envMap, envMapIntensity: 1.0,
+  }));
+  // WC tile floor
+  const tileMat = getCachedMat('wc_tiles', () => new THREE.MeshStandardMaterial({
+    color: 0xd8d0c8, roughness: 0.25,
+    polygonOffset: true, polygonOffsetFactor: -12, polygonOffsetUnits: -12,
+  }));
+  group.add(makePlane(wcW - 1, wcD - 1, tileMat, wcX, 0.35, wcZ));
+  // Stall partitions + toilets
+  const stallWallMat = getCachedMat('stall_wall', () => new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.6 }));
+  for (let si = 0; si < 3; si++) {
+    const sz = wcZ - wcD / 2 + 1.5 + si * 1.8;
+    if (si > 0) group.add(makeBox(1.8, 1.8, 0.08, stallWallMat, wcX - 1.5, 1.1, sz - 0.9));
+    createToilet(group, wcX - 2, 0, sz, ceramicMat, chromeMat);
+  }
+  // Sinks
+  for (let si = 0; si < 2; si++) {
+    const sz = wcZ - 1 + si * 2;
+    createSink(group, wcX + 2, 0, sz, ceramicMat, chromeMat, wcMirrorMat);
+  }
+  // WC ceiling light
+  group.add(makeBox(2, 0.04, 2, ceilPanelMat, wcX, H - 0.12, wcZ));
+
+  // === LIFT SHAFT (handled by createGroundFloor caller, just label area) ===
   const liftX = -W / 2 + 4;
-  group.add(makeBox(T, H, 8, damaskMat, liftX + 2, H / 2, -D / 2 + 4));
-  addCollider(bx + liftX + 2, bz + (-D / 2 + 4), T, 8);
-  // Reception west wall
-  const recpX = W / 2 - 20;
-  group.add(makeBox(T, H, 14, damaskMat, recpX, H / 2, -D / 2 + 7));
-  addCollider(bx + recpX, bz + (-D / 2 + 7), T, 14);
-  // Toilet room walls (west side)
-  group.add(makeBox(8, H, T, damaskMat, -W / 2 + 5, H / 2, 3));   // south wall
-  addCollider(bx + (-W / 2 + 5), bz + 3, 8, T);
-  group.add(makeBox(T, H, 6, damaskMat, -W / 2 + 9, H / 2, 0));   // east wall
-  addCollider(bx + (-W / 2 + 9), bz + 0, T, 6);
-  // Bar west wall
-  group.add(makeBox(T, H, 10, damaskMat, recpX, H / 2, 5));
-  addCollider(bx + recpX, bz + 5, T, 10);
-  // Restaurant north wall (with 2 openings → 2 wall segments)
-  const restZ = D / 2 - 12;
-  group.add(makeBox(25, H, T, damaskMat, -18, H / 2, restZ));
-  addCollider(bx + (-18), bz + restZ, 25, T);
-  group.add(makeBox(18, H, T, damaskMat, 28, H / 2, restZ));
-  addCollider(bx + 28, bz + restZ, 18, T);
+  const liftZ = -D / 2 + 4;
+  // Lift shaft walls + colliders
+  const liftW = 3.5, liftD = 3.5;
+  const liftTotalH = H * 3;
+  const liftMetalMat = getCachedMat('lift_metal', () => new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.6, roughness: 0.2 }));
+  const liftWallMat = getCachedMat('lift_wall', () => new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.4, metalness: 0.2 }));
+  group.add(makeBox(0.15, liftTotalH, liftD, liftWallMat, liftX - liftW / 2, liftTotalH / 2, liftZ));
+  group.add(makeBox(liftW, liftTotalH, 0.15, liftWallMat, liftX, liftTotalH / 2, liftZ - liftD / 2));
+  group.add(makeBox(liftW, liftTotalH, 0.15, liftWallMat, liftX, liftTotalH / 2, liftZ + liftD / 2));
+  group.add(makeBox(0.15, liftTotalH, (liftD - 2) / 2, liftMetalMat, liftX + liftW / 2, liftTotalH / 2, liftZ - liftD / 2 + (liftD - 2) / 4));
+  group.add(makeBox(0.15, liftTotalH, (liftD - 2) / 2, liftMetalMat, liftX + liftW / 2, liftTotalH / 2, liftZ + liftD / 2 - (liftD - 2) / 4));
+  for (let fl = 0; fl < 3; fl++) group.add(makeBox(0.15, 0.5, 2, liftMetalMat, liftX + liftW / 2, (fl + 1) * H - 0.25, liftZ));
+  addCollider(bx + liftX - liftW / 2, bz + liftZ, 0.3, liftD);
+  addCollider(bx + liftX, bz + liftZ - liftD / 2, liftW, 0.3);
+  addCollider(bx + liftX, bz + liftZ + liftD / 2, liftW, 0.3);
+  // Lift doors
+  const liftDoorMat = getCachedMat('lift_door', () => new THREE.MeshStandardMaterial({ color: 0x999999, metalness: 0.7, roughness: 0.15 }));
+  const liftDoorL = makeBox(0.06, H - 0.8, 1, liftDoorMat, liftX + liftW / 2 + 0.05, H / 2 - 0.1, liftZ - 0.5);
+  const liftDoorR = makeBox(0.06, H - 0.8, 1, liftDoorMat, liftX + liftW / 2 + 0.05, H / 2 - 0.1, liftZ + 0.5);
+  group.add(liftDoorL); group.add(liftDoorR);
+  lifts.push({
+    buildingX: _currentBuildingX, buildingZ: _currentBuildingZ,
+    localX: liftX, localZ: liftZ, w: liftW, d: liftD, H,
+    currentFloor: 0, state: 'idle', timer: 0, targetFloor: 0,
+    doorL: liftDoorL, doorR: liftDoorR,
+    doorClosedZL: liftZ - 0.5, doorClosedZR: liftZ + 0.5,
+  });
+  // Lift interior (mirror, buttons, light)
+  const mirrorMat2 = getCachedMat('mirror', () => new THREE.MeshStandardMaterial({ color: 0xaabbcc, roughness: 0.02, metalness: 0.8, envMap, envMapIntensity: 1.0 }));
+  group.add(makeBox(liftW - 0.5, H - 1.5, 0.04, mirrorMat2, liftX - liftW / 2 + 0.2, H / 2, liftZ));
+  const btnPanelMat = getCachedMat('btn_panel', () => new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5, metalness: 0.3 }));
+  group.add(makeBox(0.3, 0.6, 0.04, btnPanelMat, liftX, 1.3, liftZ + liftD / 2 - 0.1));
+  const btnGlow = new THREE.MeshStandardMaterial({ color: 0x44ff44, emissive: 0x44ff44, emissiveIntensity: 0.8 });
+  for (let bi = 0; bi < 3; bi++) group.add(makeBox(0.08, 0.08, 0.02, btnGlow, liftX, 1.1 + bi * 0.15, liftZ + liftD / 2 - 0.08));
+  group.add(makeBox(1.5, 0.04, 1.5, ceilPanelMat, liftX, H - 0.1, liftZ));
 
   // === LOBBY FURNITURE ===
-  // Chandelier (center of lobby)
-  const chandelierMat = getCachedMat('chandelier', () => new THREE.MeshStandardMaterial({
-    color: 0xddcc88, metalness: 0.6, roughness: 0.2,
-  }));
-  const chandelierGlow = new THREE.MeshStandardMaterial({
-    color: 0xffffee, emissive: 0xffffcc, emissiveIntensity: 0.8,
-  });
+  // Chandelier
+  const chandelierMat = getCachedMat('chandelier', () => new THREE.MeshStandardMaterial({ color: 0xddcc88, metalness: 0.6, roughness: 0.2 }));
+  const chandelierGlow = new THREE.MeshStandardMaterial({ color: 0xffffee, emissive: 0xffffcc, emissiveIntensity: 0.8 });
+  const lobbyCenter = -D / 2 + lobbyD / 2;
   const ring = new THREE.Mesh(new THREE.TorusGeometry(2.0, 0.08, 8, 20), chandelierMat);
-  ring.position.set(-5, H - 0.6, -D / 2 + 10);
-  ring.rotation.x = Math.PI / 2;
-  group.add(ring);
-  const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.6, 4), chandelierMat);
-  rod.position.set(-5, H - 0.3, -D / 2 + 10);
-  group.add(rod);
+  ring.position.set(0, H - 0.6, lobbyCenter); ring.rotation.x = Math.PI / 2; group.add(ring);
+  group.add(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.6, 4), chandelierMat));
+  group.children[group.children.length - 1].position.set(0, H - 0.3, lobbyCenter);
   for (let i = 0; i < 10; i++) {
     const a = (i / 10) * Math.PI * 2;
     const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 6), chandelierGlow);
-    bulb.position.set(-5 + Math.cos(a) * 2, H - 0.6, -D / 2 + 10 + Math.sin(a) * 2);
-    group.add(bulb);
+    bulb.position.set(Math.cos(a) * 2, H - 0.6, lobbyCenter + Math.sin(a) * 2); group.add(bulb);
   }
 
-  // Sofas (left + right of lobby center)
-  const sofaMat = getCachedMat('sofa_lobby', () => new THREE.MeshStandardMaterial({
-    color: isWater ? 0x2a4a6a : 0x6a2a3a, roughness: 0.85,
-  }));
+  // Sofas (2 groups in lobby)
+  const sofaMat = getCachedMat('sofa_lobby', () => new THREE.MeshStandardMaterial({ color: isWater ? 0x2a4a6a : 0x6a2a3a, roughness: 0.85 }));
   for (const side of [-1, 1]) {
-    const sx = -5 + side * 15;
-    const sz = -D / 2 + 12;
+    const sx = side * 18, sz = lobbyCenter;
     group.add(makeBox(4, 0.4, 1.2, sofaMat, sx, 0.55, sz));
     group.add(makeBox(4, 0.5, 0.2, sofaMat, sx, 0.9, sz - 0.5));
     group.add(makeBox(0.2, 0.3, 1.2, sofaMat, sx - 1.9, 0.8, sz));
     group.add(makeBox(0.2, 0.3, 1.2, sofaMat, sx + 1.9, 0.8, sz));
   }
   // Coffee table
-  group.add(makeBox(2.5, 0.05, 1, woodMat, -5, 0.55, -D / 2 + 12));
+  group.add(makeBox(2.5, 0.05, 1, woodMat, 0, 0.55, lobbyCenter));
   // Lobby rug
   const rugMat = getCachedMat('rug_' + (isWater ? 'w' : 'f'), () => new THREE.MeshStandardMaterial({
     color: isWater ? 0x1a3a5a : 0x5a1a2a, roughness: 0.95,
     polygonOffset: true, polygonOffsetFactor: -10, polygonOffsetUnits: -10,
   }));
-  group.add(makePlane(10, 14, rugMat, -5, 0.35, -D / 2 + 10));
+  group.add(makePlane(12, 8, rugMat, 0, 0.35, lobbyCenter));
   // Plants
   const potMat = getCachedMat('pot', () => new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.7 }));
   const plantMat = getCachedMat('plant', () => new THREE.MeshStandardMaterial({ color: 0x2a7a2a, roughness: 0.8 }));
-  for (const [px, pz] of [[-25, -D / 2 + 4], [10, -D / 2 + 4], [-25, 0], [10, 0]]) {
+  for (const [px, pz] of [[-30, -D / 2 + 3], [30, -D / 2 + 3], [-30, divZ - 1], [30, divZ - 1]]) {
     group.add(new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.25, 0.6, 6), potMat));
     group.children[group.children.length - 1].position.set(px, 0.45, pz);
     group.add(new THREE.Mesh(new THREE.SphereGeometry(0.6, 6, 6), plantMat));
     group.children[group.children.length - 1].position.set(px, 1.1, pz);
   }
 
-  // === RECEPTION ===
-  const deskTopMat = getCachedMat('desk_top', () => new THREE.MeshStandardMaterial({
-    color: 0x2a1a08, roughness: 0.15, envMap, envMapIntensity: 0.3,
-  }));
-  const rX = W / 2 - 15, rZ = -D / 2 + 6;
-  group.add(makeBox(8, 1.0, 1.5, woodMat, rX, 0.65, rZ));
-  group.add(makeBox(8.2, 0.06, 1.7, deskTopMat, rX, 1.17, rZ));
-  group.add(makeBox(8, 0.1, 0.05, accentMat, rX, 0.9, rZ + 0.8));
+  // === RECEPTION DESK (center of lobby, facing north entrance) ===
+  const deskTopMat = getCachedMat('desk_top', () => new THREE.MeshStandardMaterial({ color: 0x2a1a08, roughness: 0.15, envMap, envMapIntensity: 0.3 }));
+  const rX = 0, rZ = lobbyCenter + 3;
+  group.add(makeBox(10, 1.0, 1.5, woodMat, rX, 0.65, rZ));
+  group.add(makeBox(10.2, 0.06, 1.7, deskTopMat, rX, 1.17, rZ));
+  group.add(makeBox(10, 0.1, 0.05, accentMat, rX, 0.9, rZ + 0.8));
   // Monitors
   const monMat = getCachedMat('monitor', () => new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1, metalness: 0.3 }));
-  const screenMat = new THREE.MeshStandardMaterial({ color: 0x88ccff, emissive: 0x88ccff, emissiveIntensity: 0.4 });
-  for (const mx of [-2.5, 0, 2.5]) {
+  const screenMat2 = new THREE.MeshStandardMaterial({ color: 0x88ccff, emissive: 0x88ccff, emissiveIntensity: 0.4 });
+  for (const mx of [-3, 0, 3]) {
     group.add(makeBox(0.6, 0.4, 0.04, monMat, rX + mx, 1.45, rZ - 0.2));
-    group.add(makeBox(0.5, 0.3, 0.02, screenMat, rX + mx, 1.45, rZ - 0.22));
+    group.add(makeBox(0.5, 0.3, 0.02, screenMat2, rX + mx, 1.45, rZ - 0.22));
   }
 
-  // === LIFT SHAFT (northwest corner, all 3 floors) ===
-  // liftX already defined above at line ~568
-  const liftZ = -D / 2 + 4;
-  const liftW = 3.5, liftD = 3.5;
-  const liftTotalH = H * 3; // spans all 3 floors
-  const liftMetalMat = getCachedMat('lift_metal', () => new THREE.MeshStandardMaterial({
-    color: 0x888888, metalness: 0.6, roughness: 0.2,
-  }));
-  const liftWallMat = getCachedMat('lift_wall', () => new THREE.MeshStandardMaterial({
-    color: 0xcccccc, roughness: 0.4, metalness: 0.2,
-  }));
-
-  // Shaft walls (full height, 3 floors)
-  // Back wall (west)
-  group.add(makeBox(0.15, liftTotalH, liftD, liftWallMat, liftX - liftW / 2, liftTotalH / 2, liftZ));
-  // Left wall (north)
-  group.add(makeBox(liftW, liftTotalH, 0.15, liftWallMat, liftX, liftTotalH / 2, liftZ - liftD / 2));
-  // Right wall (south)
-  group.add(makeBox(liftW, liftTotalH, 0.15, liftWallMat, liftX, liftTotalH / 2, liftZ + liftD / 2));
-  // Front (east) – metal frame with opening for door
-  group.add(makeBox(0.15, liftTotalH, (liftD - 2) / 2, liftMetalMat,
-    liftX + liftW / 2, liftTotalH / 2, liftZ - liftD / 2 + (liftD - 2) / 4));
-  group.add(makeBox(0.15, liftTotalH, (liftD - 2) / 2, liftMetalMat,
-    liftX + liftW / 2, liftTotalH / 2, liftZ + liftD / 2 - (liftD - 2) / 4));
-  // Lintel above door openings (per floor)
-  for (let fl = 0; fl < 3; fl++) {
-    group.add(makeBox(0.15, 0.5, 2, liftMetalMat,
-      liftX + liftW / 2, (fl + 1) * H - 0.25, liftZ));
-  }
-  // Lift shaft colliders (back/north/south walls – front has door opening)
-  addCollider(bx + liftX - liftW / 2, bz + liftZ, 0.3, liftD);           // back (west)
-  addCollider(bx + liftX, bz + liftZ - liftD / 2, liftW, 0.3);           // north
-  addCollider(bx + liftX, bz + liftZ + liftD / 2, liftW, 0.3);           // south
-
-  // Lift door (at ground floor, will be animated by Ticket 111)
-  const liftDoorMat = getCachedMat('lift_door', () => new THREE.MeshStandardMaterial({
-    color: 0x999999, metalness: 0.7, roughness: 0.15,
-  }));
-  const liftDoorL = makeBox(0.06, H - 0.8, 1, liftDoorMat,
-    liftX + liftW / 2 + 0.05, H / 2 - 0.1, liftZ - 0.5);
-  const liftDoorR = makeBox(0.06, H - 0.8, 1, liftDoorMat,
-    liftX + liftW / 2 + 0.05, H / 2 - 0.1, liftZ + 0.5);
-  group.add(liftDoorL);
-  group.add(liftDoorR);
-
-  // Register lift for physics
-  lifts.push({
-    buildingX: _currentBuildingX, buildingZ: _currentBuildingZ,
-    localX: liftX, localZ: liftZ,
-    w: liftW, d: liftD, H,
-    currentFloor: 0,
-    state: 'idle', // idle, closing, moving, opening
-    timer: 0,
-    targetFloor: 0,
-    doorL: liftDoorL, doorR: liftDoorR,
-    doorClosedZL: liftZ - 0.5, doorClosedZR: liftZ + 0.5,
-  });
-
-  // Cabin interior: mirror on back wall, buttons, light
-  const mirrorMat2 = getCachedMat('mirror', () => new THREE.MeshStandardMaterial({
-    color: 0xaabbcc, roughness: 0.02, metalness: 0.8, envMap, envMapIntensity: 1.0,
-  }));
-  group.add(makeBox(liftW - 0.5, H - 1.5, 0.04, mirrorMat2,
-    liftX - liftW / 2 + 0.2, H / 2, liftZ)); // mirror on back wall
-  // Button panel
-  const btnPanelMat = getCachedMat('btn_panel', () => new THREE.MeshStandardMaterial({
-    color: 0x333333, roughness: 0.5, metalness: 0.3,
-  }));
-  group.add(makeBox(0.3, 0.6, 0.04, btnPanelMat,
-    liftX, 1.3, liftZ + liftD / 2 - 0.1));
-  // 3 floor buttons (small emissive dots)
-  const btnGlow = new THREE.MeshStandardMaterial({
-    color: 0x44ff44, emissive: 0x44ff44, emissiveIntensity: 0.8,
-  });
-  for (let bi = 0; bi < 3; bi++) {
-    group.add(makeBox(0.08, 0.08, 0.02, btnGlow,
-      liftX, 1.1 + bi * 0.15, liftZ + liftD / 2 - 0.08));
-  }
-  // Cabin ceiling light
-  group.add(makeBox(1.5, 0.04, 1.5, ceilPanelMat, liftX, H - 0.1, liftZ));
-  // Lift uses emissive panel only (no extra PointLight for performance)
-
-  // === TOILETS (west side, south of lift) ===
-  const wcX = -W / 2 + 5;
-  const wcZ = 0;
-  // Toilet door (slides open)
-  addAutoDoor(group, -W / 2 + 9, 0, -1, 1.2, 2.2, 'z', -1.5,
-    _currentBuildingX, _currentBuildingZ);
-  // Tile floor
-  const tileMat = getCachedMat('wc_tiles', () => new THREE.MeshStandardMaterial({
-    color: 0xd8d0c8, roughness: 0.25,
-    polygonOffset: true, polygonOffsetFactor: -12, polygonOffsetUnits: -12,
-  }));
-  group.add(makePlane(7, 5, tileMat, wcX, 0.35, wcZ));
-
-  // Shared materials for sanitary fixtures
-  const ceramicMat = getCachedMat('ceramic_white', () => new THREE.MeshStandardMaterial({
-    color: 0xf2f2f0, roughness: 0.15, metalness: 0.02,
-    envMap, envMapIntensity: 0.3,
-  }));
-  const chromeMat = getCachedMat('chrome', () => new THREE.MeshStandardMaterial({
-    color: 0xcccccc, metalness: 0.9, roughness: 0.05,
-    envMap, envMapIntensity: 0.6,
-  }));
-  const wcMirrorMat = getCachedMat('mirror', () => new THREE.MeshStandardMaterial({
-    color: 0xaabbcc, roughness: 0.02, metalness: 0.8, envMap, envMapIntensity: 1.0,
-  }));
-  const stallWallMat = getCachedMat('stall_wall', () => new THREE.MeshStandardMaterial({
-    color: 0xcccccc, roughness: 0.6,
-  }));
-
-  // 3 toilet stalls along west wall
-  for (let si = 0; si < 3; si++) {
-    const sz = wcZ - 2 + si * 2;
-    if (si > 0) {
-      group.add(makeBox(1.8, 1.8, 0.08, stallWallMat, wcX - 1, 1.1, sz - 1));
-    }
-    createToilet(group, wcX - 1.5, 0, sz, ceramicMat, chromeMat);
+  // === BAR (south-west) ===
+  group.add(makeBox(barW * 0.6, 1.1, 0.6, woodMat, barCenterX, 0.55, divZ + 2));
+  group.add(makeBox(barW * 0.6 + 0.1, 0.05, 0.7, deskTopMat, barCenterX, 1.12, divZ + 2));
+  // Bar stools
+  for (let i = 0; i < 5; i++) {
+    const sx2 = barCenterX - barW * 0.3 + i * (barW * 0.6) / 4;
+    group.add(makeBox(0.35, 0.03, 0.35, getCachedMat('stool', () => new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 0.7 })), sx2, 0.7, divZ + 3));
+    group.add(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.7, 6), getCachedMat('stool_leg', () => new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.5 }))));
+    group.children[group.children.length - 1].position.set(sx2, 0.35, divZ + 3);
   }
 
-  // 2 sinks along east wall of WC
-  for (let si = 0; si < 2; si++) {
-    const sz = wcZ - 1 + si * 2;
-    createSink(group, wcX + 2, 0, sz, ceramicMat, chromeMat, wcMirrorMat);
-  }
-
-  // WC light
-  // WC uses emissive panel only (no extra PointLight for performance)
-
-  // === BAR / LOUNGE (east side, south of reception) ===
-  const barX = W / 2 - 15;
-  const barZ = 2;
-  // Bar counter (L-shape: long + short arm)
-  const barCounterMat = getCachedMat('bar_counter', () => new THREE.MeshStandardMaterial({
-    color: 0x1a1a2a, roughness: 0.15, metalness: 0.1, envMap, envMapIntensity: 0.4,
-  }));
-  const barTopMat2 = getCachedMat('bar_top', () => new THREE.MeshStandardMaterial({
-    color: 0x0a0a1a, roughness: 0.08, metalness: 0.15, envMap, envMapIntensity: 0.5,
-  }));
-  // Long arm
-  group.add(makeBox(7, 1.1, 0.8, barCounterMat, barX, 0.7, barZ));
-  group.add(makeBox(7.2, 0.06, 1.0, barTopMat2, barX, 1.27, barZ));
-  // Short arm (perpendicular)
-  group.add(makeBox(0.8, 1.1, 3, barCounterMat, barX + 3.9, 0.7, barZ - 2));
-  group.add(makeBox(1.0, 0.06, 3.2, barTopMat2, barX + 3.9, 1.27, barZ - 2));
-
-  // 4 Bar stools
-  const stoolMat = getCachedMat('stool', () => new THREE.MeshStandardMaterial({
-    color: 0x444444, metalness: 0.4, roughness: 0.3,
-  }));
-  const stoolSeatMat = getCachedMat('stool_seat', () => new THREE.MeshStandardMaterial({
-    color: 0x3a2a1a, roughness: 0.7,
-  }));
-  for (let si = 0; si < 4; si++) {
-    const sx = barX - 2.5 + si * 1.8;
-    // Pole
-    group.add(makeBox(0.06, 0.75, 0.06, stoolMat, sx, 0.5, barZ + 0.8));
-    // Seat (cylinder)
-    const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.2, 0.08, 6), stoolSeatMat);
-    seat.position.set(sx, 0.88, barZ + 0.8);
-    group.add(seat);
-    // Footrest ring
-    group.add(makeBox(0.25, 0.03, 0.25, stoolMat, sx, 0.3, barZ + 0.8));
-  }
-
-  // Bottle shelf (behind bar, against east wall)
-  const shelfMat = getCachedMat('bar_shelf', () => new THREE.MeshStandardMaterial({
-    color: 0x2a1a0a, roughness: 0.5,
-  }));
-  // Shelf back panel
-  group.add(makeBox(7, 2.5, 0.15, shelfMat, barX, 1.8, barZ - 0.7));
-  // 3 shelf boards
-  for (let sh = 0; sh < 3; sh++) {
-    group.add(makeBox(6.5, 0.08, 0.35, shelfMat, barX, 1.0 + sh * 0.7, barZ - 0.5));
-  }
-  // Bottles (colored boxes on shelves)
-  const bottleColors = [0x1a5a1a, 0x8a4a1a, 0xaa8822, 0x2a2a6a, 0x6a1a1a, 0xccaa00];
-  for (let sh = 0; sh < 3; sh++) {
-    for (let bi = 0; bi < 5; bi++) {
-      const bx = barX - 2.5 + bi * 1.3;
-      const by = 1.1 + sh * 0.7;
-      const col = bottleColors[(sh * 5 + bi) % bottleColors.length];
-      group.add(makeBox(0.15, 0.4, 0.15, new THREE.MeshStandardMaterial({
-        color: col, roughness: 0.3, metalness: 0.1,
-      }), bx, by, barZ - 0.45));
-    }
-  }
-
-  // Bar warm light
-  // Bar uses ceiling panel light from main lightPositions (no extra PointLight)
-
-  // === RESTAURANT (south section) ===
-  const restaurantZ = D / 2 - 6;
-  const restW = W - 12;
-  // Restaurant floor (warm tile, different from lobby marble)
-  const restFloorMat = getCachedMat('rest_floor', () => new THREE.MeshStandardMaterial({
-    map: textures.concrete, color: 0xc8b8a0, roughness: 0.6,
-    polygonOffset: true, polygonOffsetFactor: -12, polygonOffsetUnits: -12,
-  }));
-  group.add(makePlane(restW, 11, restFloorMat, 0, 0.35, restZ));
-
-  // Buffet counter (center island)
-  const buffetMat = getCachedMat('buffet', () => new THREE.MeshStandardMaterial({
-    color: 0x888888, metalness: 0.3, roughness: 0.4,
-  }));
-  group.add(makeBox(18, 0.9, 1.2, buffetMat, 0, 0.6, restaurantZ - 2));
-  group.add(makeBox(18.2, 0.05, 1.4, getCachedMat('buffet_top', () => new THREE.MeshStandardMaterial({
-    color: 0xdddddd, roughness: 0.2, metalness: 0.1 })), 0, 1.07, restaurantZ - 2));
-  // Food display domes
-  const domeMat = getCachedMat('food_dome', () => new THREE.MeshStandardMaterial({
-    color: 0xaaddff, transparent: true, opacity: 0.2, roughness: 0.05 }));
-  const foodColors = [0xcc8844, 0x88cc44, 0xcc4444, 0xddaa22, 0x44aa88];
-  for (let fi = 0; fi < 5; fi++) {
-    const fx = -7 + fi * 3.5;
-    group.add(makeBox(1.5, 0.6, 0.8, domeMat, fx, 1.4, restaurantZ - 2));
-    group.add(makeBox(1.2, 0.2, 0.5, new THREE.MeshStandardMaterial({ color: foodColors[fi], roughness: 0.8 }),
-      fx, 1.2, restaurantZ - 2));
-  }
-
-  // Dining tables (2 rows x 4 columns)
-  const tableMat2 = getCachedMat('dining_table', () => new THREE.MeshStandardMaterial({
-    map: textures.woodOak, roughness: 0.35 }));
-  const chairMat2 = getCachedMat('dining_chair', () => new THREE.MeshStandardMaterial({
-    color: 0x5a4a3a, roughness: 0.7 }));
-  const tlegMat = getCachedMat('table_legs', () => new THREE.MeshStandardMaterial({
-    color: 0x444444, metalness: 0.4, roughness: 0.3 }));
-  for (let row = 0; row < 2; row++) {
+  // === RESTAURANT (south-east, tables) ===
+  const tableMat = getCachedMat('table_rest', () => new THREE.MeshStandardMaterial({ map: textures.woodWalnut, roughness: 0.35 }));
+  const restZCenter = divZ + serviceD / 2;
+  for (let row = 0; row < 3; row++) {
     for (let col = 0; col < 4; col++) {
-      const tx = -restW / 2 + 12 + col * (restW - 20) / 3;
-      const tz = restaurantZ + 1 + row * 4;
-      group.add(makeBox(2.0, 0.06, 1.2, tableMat2, tx, 0.78, tz));
-      group.add(makeBox(0.1, 0.75, 0.1, tlegMat, tx, 0.4, tz));
-      // 2 chairs per table (simplified for performance)
-      for (const side of [-1.2, 1.2]) {
-        group.add(makeBox(0.45, 0.04, 0.45, chairMat2, tx + side, 0.48, tz));
-        group.add(makeBox(0.45, 0.4, 0.05, chairMat2, tx + side, 0.7, tz + (side < 0 ? -0.2 : 0.2)));
-        group.add(makeBox(0.04, 0.46, 0.04, tlegMat, tx + side, 0.24, tz));
+      const tx = restCenterX - restW / 2 + 3 + col * (restW - 6) / 3;
+      const tz = restZCenter - serviceD / 2 + 3 + row * (serviceD - 4) / 2;
+      group.add(makeBox(1.2, 0.04, 1.2, tableMat, tx, 0.75, tz));
+      group.add(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 0.73, 6),
+        getCachedMat('table_leg', () => new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.3 }))));
+      group.children[group.children.length - 1].position.set(tx, 0.375, tz);
+      // 4 chairs per table
+      for (const [cdx, cdz] of [[-0.8, 0], [0.8, 0], [0, -0.8], [0, 0.8]]) {
+        group.add(makeBox(0.4, 0.03, 0.4, getCachedMat('chair_rest', () => new THREE.MeshStandardMaterial({ color: isWater ? 0x2a4a6a : 0x6a2a3a, roughness: 0.8 })), tx + cdx, 0.45, tz + cdz));
       }
     }
   }
 
-  // === HOTEL LOGO (south back wall) ===
-  group.add(makeBox(8, 2.5, 0.12, accentMat, 0, 2.5, D / 2 - 0.35));
-  group.add(makeBox(7, 1.5, 0.05, new THREE.MeshStandardMaterial({
-    color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.3,
-  }), 0, 2.5, D / 2 - 0.42));
+  // === ACCENT STRIP (south interior wall) ===
+  group.add(makeBox(W - 2, 0.6, 0.07, accentMat, 0, 0.3, D / 2 - 0.5));
 
-  // === LIGHTING (pendant lights, always bright) ===
-  // Reduced to 3 PointLights (from 5+bar+wc+lift = 7) for performance
+  // === LIGHTING (3 pendant lights) ===
   const lightPositions = [
-    { x: -5, z: -D / 2 + 8, int: 4 },    // lobby (covers front+center)
-    { x: W / 2 - 15, z: 0, int: 3 },      // reception+bar
-    { x: 0, z: D / 2 - 6, int: 3.5 },     // restaurant
+    { x: 0, z: lobbyCenter, int: 4 },         // lobby center
+    { x: barCenterX, z: restZCenter, int: 3 }, // bar/restaurant
+    { x: restCenterX, z: restZCenter, int: 3.5 }, // restaurant
   ];
   for (const lp of lightPositions) {
     const pl = new THREE.PointLight(0xfff0dd, lp.int, 45);
@@ -1280,9 +1136,7 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
     pl._dayIntensity = lp.int;
     group.add(pl);
     lobbyLights.push(pl);
-    // Ceiling panel above
     group.add(makeBox(3.5, 0.06, 1.2, ceilPanelMat, lp.x, H - 0.08, lp.z));
-    // Pendant rod
     group.add(makeBox(0.03, 1.4, 0.03, getCachedMat('pendant_rod', () =>
       new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.5 })),
       lp.x, H - 0.75, lp.z));
@@ -1290,53 +1144,79 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
 }
 
 // =============================================================================
-// UPPER FLOOR (1.OG or 2.OG) – Hallway + 4 Rooms with Bathrooms
+// UPPER FLOOR (1.OG or 2.OG) – Central Hallway + 12 Rooms
 // =============================================================================
 function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat, ceilPanelMat, accentColor) {
-  const y = floorNum * H; // base Y of this floor
-  const stairX = W / 2 - 4; // staircase position (east)
-  const liftX2 = -W / 2 + 4; // lift position (west)
+  // ═══════════════════════════════════════════════════════════════
+  // REALISTIC HOTEL FLOOR: 12 rooms (6 north, 6 south), central hallway
+  //
+  // ┌──────┬───┬───┬───┬───┬───┬───┬──────────────┬─────────┐
+  // │ LIFT │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │              │ TREPPE  │
+  // │      ├───┴───┴───┴───┴───┴───┤  (open area)  │         │
+  // │      │     HALLWAY (3m)       │              │         │
+  // │      ├───┬───┬───┬───┬───┬───┤              │         │
+  // │      │ 7 │ 8 │ 9 │10 │11 │12 │              │         │
+  // └──────┴───┴───┴───┴───┴───┴───┴──────────────┴─────────┘
+  //
+  const y = floorNum * H;
+  const ubx = _currentBuildingX, ubz = _currentBuildingZ;
+
+  // Layout
+  const sideW = 8; // reserved for lift (west) and staircase (east)
+  const hallD2 = 3; // hallway depth
+  const hallZ = 0;  // hallway centered in building
+  const roomsW = W - sideW * 2; // usable width for rooms
+  const roomCount = 6; // per side
+  const roomW = roomsW / roomCount; // ~16.5m per room
+  const roomDN = (D - hallD2) / 2 - 0.5; // north room depth
+  const roomDS = (D - hallD2) / 2 - 0.5; // south room depth
+  const roomStartX = -W / 2 + sideW;
 
   // Materials
   const laminateMat = getCachedMat('laminate', () => new THREE.MeshStandardMaterial({
     color: 0xc8a882, roughness: 0.45,
     polygonOffset: true, polygonOffsetFactor: -12, polygonOffsetUnits: -12,
   }));
-  const tileMat2 = getCachedMat('wc_tiles', () => new THREE.MeshStandardMaterial({
-    color: 0xd8d0c8, roughness: 0.25,
-    polygonOffset: true, polygonOffsetFactor: -12, polygonOffsetUnits: -12,
+  const wallRoomMat = getCachedMat('wall_room', () => new THREE.MeshStandardMaterial({
+    color: 0xf0ebe0, roughness: 0.8,
   }));
-  const bedMat = getCachedMat('bedsheet', () => new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.9 }));
-  const bedFrameMat = getCachedMat('bedframe', () => new THREE.MeshStandardMaterial({ map: textures.woodOak, roughness: 0.4 }));
-  const nightMat = getCachedMat('nightstand', () => new THREE.MeshStandardMaterial({ map: textures.woodWalnut, roughness: 0.35 }));
-  const doorFrameMat = getCachedMat('doorframe', () => new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 0.4 }));
-  const toiletMat2 = getCachedMat('toilet_white', () => new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.3 }));
-  const chromeMat = getCachedMat('chrome', () => new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.1 }));
-  const mirrorMat3 = getCachedMat('mirror', () => new THREE.MeshStandardMaterial({ color: 0xaabbcc, roughness: 0.02, metalness: 0.8, envMap, envMapIntensity: 1.0 }));
-  const glassMat2 = getGlassMat();
+  const doorFrameMat = getCachedMat('doorframe', () => new THREE.MeshStandardMaterial({
+    map: textures.woodWalnut, roughness: 0.35, color: 0x8a7060,
+  }));
+  const glassMat2 = getCachedMat('glass_door', () => new THREE.MeshStandardMaterial({
+    color: 0x99bbdd, transparent: true, opacity: 0.2, roughness: 0.02,
+    envMap, envMapIntensity: 0.7,
+  }));
+  const bedFrameMat = getCachedMat('bedframe', () => new THREE.MeshStandardMaterial({
+    map: textures.woodWalnut, roughness: 0.4,
+  }));
+  const bedMat = getCachedMat('bedsheet', () => new THREE.MeshStandardMaterial({
+    color: 0xf5f0e8, roughness: 0.9,
+  }));
+  const nightMat = getCachedMat('nightstand', () => new THREE.MeshStandardMaterial({
+    map: textures.woodWalnut, roughness: 0.35,
+  }));
 
-  // === FLOOR SLAB (with stairwell opening) ===
-  // Main slab (left of stairwell)
-  const slabLeftW = W - 10; // everything except stair+lift area
-  group.add(makeBox(slabLeftW, 0.3, D - 2, laminateMat, -2, y, 0));
+  // === FLOOR SLAB ===
+  const slabW = W - 6; // leave openings for stairwell and lift
+  group.add(makeBox(slabW, 0.3, D - 2, laminateMat, 0, y, 0));
 
   // === CEILING ===
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W - 4, D - 2), ceilMat);
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W - 2, D - 2), ceilMat);
   ceil.rotation.x = Math.PI / 2;
   ceil.position.set(0, y + H - 0.15, 0);
   group.add(ceil);
 
-  // === HALLWAY (north side, 3m wide) ===
-  const hallD = 3;
-  const hallZ = -D / 2 + 3 + hallD / 2; // 3m from north wall
+  // === HALLWAY (runs full building width, connects lift to staircase) ===
+  const hallNorth = hallZ - hallD2 / 2;  // = -1.5
+  const hallSouth = hallZ + hallD2 / 2;  // = +1.5
   // Carpet runner
-  const carpetMat = getCachedMat('carpet_hall', () => new THREE.MeshStandardMaterial({
+  group.add(makePlane(W - 4, hallD2 - 0.3, getCachedMat('carpet_hall', () => new THREE.MeshStandardMaterial({
     color: accentColor, roughness: 0.95,
     polygonOffset: true, polygonOffsetFactor: -14, polygonOffsetUnits: -14,
-  }));
-  group.add(makePlane(W - 16, hallD - 0.5, carpetMat, 0, y + 0.2, hallZ));
+  })), 0, y + 0.2, hallZ));
 
-  // Hallway: 3 emissive panels (visual) + 1 PointLight (performance)
+  // Hallway lights (3 panels + 1 PointLight)
   for (let hx = -W / 4; hx <= W / 4; hx += W / 4) {
     group.add(makeBox(2, 0.04, 1, ceilPanelMat, hx, y + H - 0.1, hallZ));
   }
@@ -1346,112 +1226,87 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
   group.add(hallLight);
   lobbyLights.push(hallLight);
 
-  // === 4 ROOMS (south side) ===
-  const roomCount = 4;
-  const usableW = W - 16; // minus lift (8m) + stairs (8m)
-  const roomW = usableW / roomCount;
-  const roomD = D - hallD - 3.5; // depth: rooms extend to near south wall (balcony door aligns with exterior)
-  const roomStartX = -W / 2 + 8; // after lift shaft
-  const ubx = _currentBuildingX, ubz = _currentBuildingZ; // world offset for colliders
+  // === ROOMS (6 north + 6 south) ===
+  for (let side = 0; side < 2; side++) { // 0=north, 1=south
+    const isSouth = side === 1;
+    const roomD2 = isSouth ? roomDS : roomDN;
+    const faceSign = isSouth ? 1 : -1;
+    const hallEdge = isSouth ? hallSouth : hallNorth;
+    const rz = hallEdge + faceSign * (roomD2 / 2 + 0.25); // room center Z
 
-  for (let r = 0; r < roomCount; r++) {
-    const rx = roomStartX + r * roomW + roomW / 2;
-    const rz = hallZ + hallD / 2 + roomD / 2 + 0.5;
-    const doorW2 = 1.2;
-    const doorH2 = 2.2;
-    const wallH2 = H - 0.5;
+    for (let r = 0; r < roomCount; r++) {
+      const rx = roomStartX + r * roomW + roomW / 2;
 
-    // Room partition walls (with collision)
-    if (r > 0) {
-      group.add(makeBox(0.15, wallH2, roomD + 1, damaskMat, rx - roomW / 2, y + wallH2 / 2, rz));
-      addCollider(ubx + rx - roomW / 2, ubz + rz, 0.3, roomD + 1, y + wallH2, y);
+      // Room partition wall (between adjacent rooms)
+      if (r > 0) {
+        group.add(makeBox(0.15, H - 0.5, roomD2, wallRoomMat, rx - roomW / 2, y + (H - 0.5) / 2, rz));
+        addCollider(ubx + rx - roomW / 2, ubz + rz, 0.3, roomD2, y + H, y);
+      }
+
+      // Hallway wall with door opening (1.2m door)
+      const doorW2 = 1.2;
+      const wallSegW = (roomW - doorW2) / 2 - 0.8; // extra gap for player radius
+      if (wallSegW > 0.5) {
+        // Left segment
+        group.add(makeBox(wallSegW, H - 0.5, 0.15, wallRoomMat, rx - roomW / 2 + wallSegW / 2 + 0.2, y + (H - 0.5) / 2, hallEdge));
+        addCollider(ubx + rx - roomW / 2 + wallSegW / 2 + 0.2, ubz + hallEdge, wallSegW, 0.3, y + H, y);
+        // Right segment
+        group.add(makeBox(wallSegW, H - 0.5, 0.15, wallRoomMat, rx + roomW / 2 - wallSegW / 2 - 0.2, y + (H - 0.5) / 2, hallEdge));
+        addCollider(ubx + rx + roomW / 2 - wallSegW / 2 - 0.2, ubz + hallEdge, wallSegW, 0.3, y + H, y);
+      }
+      // Door frame
+      group.add(makeBox(0.08, 2.2, 0.2, doorFrameMat, rx - doorW2 / 2, y + 1.1, hallEdge));
+      group.add(makeBox(0.08, 2.2, 0.2, doorFrameMat, rx + doorW2 / 2, y + 1.1, hallEdge));
+      // Auto-door
+      addAutoDoor(group, rx, y, hallEdge, doorW2, 2.2, 'x', doorW2 + 0.3,
+        _currentBuildingX, _currentBuildingZ);
+
+      // Room floor
+      group.add(makePlane(roomW - 1, roomD2 - 1, laminateMat, rx, y + 0.2, rz));
+
+      // === BED (against outer wall) ===
+      const outerZ = rz + faceSign * (roomD2 / 2 - 1.5);
+      group.add(makeBox(2.2, 0.35, 1.8, bedFrameMat, rx, y + 0.32, outerZ));
+      group.add(makeBox(2.0, 0.2, 1.6, bedMat, rx, y + 0.55, outerZ));
+      group.add(makeBox(2.2, 0.8, 0.1, bedFrameMat, rx, y + 0.85, outerZ + faceSign * (-0.85)));
+      // Nightstand
+      group.add(makeBox(0.5, 0.5, 0.4, nightMat, rx + 1.4, y + 0.4, outerZ));
+      // Lamp
+      group.add(makeBox(0.15, 0.3, 0.15, getCachedMat('roomlamp', () => new THREE.MeshStandardMaterial({
+        color: 0xffeecc, emissive: 0xffddaa, emissiveIntensity: 0.6 })),
+        rx + 1.4, y + 0.8, outerZ));
+
+      // === BALCONY DOOR (south rooms only, against outer wall) ===
+      if (isSouth) {
+        const balcDoorZ = rz + roomD2 / 2 - 0.1;
+        addAutoDoor(group, rx, y, balcDoorZ, 2.0, 2.2, 'x', 2.3,
+          _currentBuildingX, _currentBuildingZ);
+        group.add(makeBox(2.0, 0.8, 0.08, glassMat2, rx, y + 2.6, balcDoorZ));
+      }
+
+      // === BATHROOM (corner of room, near hallway) ===
+      if (r % 3 === 0) { // every 3rd room has detailed bathroom (performance)
+        const bathW2 = 2.5, bathD3 = 2.5;
+        const bathX = rx - roomW / 2 + bathW2 / 2 + 0.5;
+        const bathZ = rz - faceSign * (roomD2 / 2 - bathD3 / 2 - 0.5);
+        // Partition wall
+        group.add(makeBox(0.12, H - 1, bathD3, wallRoomMat, bathX + bathW2 / 2, y + (H - 1) / 2, bathZ));
+        // Fixtures
+        const ceramicM = getCachedMat('ceramic_white', () => new THREE.MeshStandardMaterial({ color: 0xf2f2f0, roughness: 0.15, metalness: 0.02, envMap, envMapIntensity: 0.3 }));
+        const chromeM = getCachedMat('chrome', () => new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.9, roughness: 0.05, envMap, envMapIntensity: 0.6 }));
+        const mirrorM = getCachedMat('mirror', () => new THREE.MeshStandardMaterial({ color: 0xaabbcc, roughness: 0.02, metalness: 0.8, envMap, envMapIntensity: 1.0 }));
+        createToilet(group, bathX - 0.3, y, bathZ - 0.5 * faceSign, ceramicM, chromeM);
+        createSink(group, bathX + 0.8, y, bathZ + 0.3 * faceSign, ceramicM, chromeM, mirrorM);
+      }
+
+      // Room ceiling light
+      const ceilLampMat = getCachedMat('ceillamp', () => new THREE.MeshStandardMaterial({
+        color: 0xfff8f0, emissive: 0xfff0dd, emissiveIntensity: 0.5, side: THREE.DoubleSide,
+      }));
+      group.add(makeBox(1.2, 0.04, 1.2, ceilLampMat, rx, y + H - 0.12, rz));
     }
-
-    // North wall (hallway side) with door opening
-    const nwSegW = (roomW - doorW2) / 2 - 0.6; // wider gap for player radius (0.4m)
-    group.add(makeBox(nwSegW, wallH2, 0.15, damaskMat, rx - roomW / 2 + nwSegW / 2 + 0.1, y + wallH2 / 2, hallZ + hallD / 2));
-    addCollider(ubx + rx - roomW / 2 + nwSegW / 2 + 0.1, ubz + hallZ + hallD / 2, nwSegW, 0.3, y + wallH2, y);
-    group.add(makeBox(nwSegW, wallH2, 0.15, damaskMat, rx + roomW / 2 - nwSegW / 2 - 0.1, y + wallH2 / 2, hallZ + hallD / 2));
-    addCollider(ubx + rx + roomW / 2 - nwSegW / 2 - 0.1, ubz + hallZ + hallD / 2, nwSegW, 0.3, y + wallH2, y);
-    group.add(makeBox(doorW2 + 0.2, wallH2 - doorH2, 0.15, damaskMat, rx, y + doorH2 + (wallH2 - doorH2) / 2, hallZ + hallD / 2));
-    // Door frame
-    group.add(makeBox(0.08, doorH2, 0.2, doorFrameMat, rx - doorW2 / 2, y + doorH2 / 2, hallZ + hallD / 2));
-    group.add(makeBox(0.08, doorH2, 0.2, doorFrameMat, rx + doorW2 / 2, y + doorH2 / 2, hallZ + hallD / 2));
-    // Auto-door (slides to the right when player approaches)
-    addAutoDoor(group, rx, y, hallZ + hallD / 2, doorW2, doorH2, 'x', doorW2 + 0.3,
-      _currentBuildingX, _currentBuildingZ);
-
-    // Room laminate floor
-    group.add(makePlane(roomW - 1, roomD - 1, laminateMat, rx, y + 0.2, rz));
-
-    // === BED ===
-    group.add(makeBox(2.2, 0.35, 2.0, bedFrameMat, rx, y + 0.32, rz + roomD / 2 - 2));
-    group.add(makeBox(2.0, 0.2, 1.8, bedMat, rx, y + 0.55, rz + roomD / 2 - 2));
-    group.add(makeBox(1.2, 0.12, 0.35, bedMat, rx, y + 0.72, rz + roomD / 2 - 2.8));
-    group.add(makeBox(2.2, 0.8, 0.1, bedFrameMat, rx, y + 0.85, rz + roomD / 2 - 2.9));
-
-    // Nightstand
-    group.add(makeBox(0.5, 0.5, 0.4, nightMat, rx + 1.4, y + 0.4, rz + roomD / 2 - 2.5));
-    // Lamp on nightstand
-    group.add(makeBox(0.15, 0.3, 0.15, getCachedMat('roomlamp', () => new THREE.MeshStandardMaterial({
-      color: 0xffeecc, emissive: 0xffddaa, emissiveIntensity: 0.6 })),
-      rx + 1.4, y + 0.8, rz + roomD / 2 - 2.5));
-
-    // Balcony door (glass, slides open when player approaches)
-    addAutoDoor(group, rx, y, rz + roomD / 2 - 0.1, 2.0, 2.2, 'x', 2.3,
-      _currentBuildingX, _currentBuildingZ);
-    // Fixed glass panel above door
-    group.add(makeBox(2.0, 0.8, 0.08, glassMat2, rx, y + 2.6, rz + roomD / 2 - 0.1));
-
-    // Balcony furniture (small table + chair + plant)
-    const balcZ = rz + roomD / 2 + 0.5; // just outside on balcony
-    // Small table
-    group.add(makeBox(0.6, 0.04, 0.6, getCachedMat('balc_table', () => new THREE.MeshStandardMaterial({
-      color: 0xaaaaaa, roughness: 0.4, metalness: 0.3 })),
-      rx - 0.5, y + 0.72, balcZ));
-    group.add(makeBox(0.04, 0.7, 0.04, getCachedMat('table_legs', () => new THREE.MeshStandardMaterial({
-      color: 0x444444, metalness: 0.4 })),
-      rx - 0.5, y + 0.36, balcZ));
-    // Chair
-    group.add(makeBox(0.45, 0.04, 0.45, getCachedMat('balc_chair', () => new THREE.MeshStandardMaterial({
-      color: 0x888888, roughness: 0.5 })),
-      rx + 0.5, y + 0.45, balcZ));
-    // Small potted plant
-    const bpotMat = getCachedMat('pot', () => new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.7 }));
-    const bplantMat = getCachedMat('plant', () => new THREE.MeshStandardMaterial({ color: 0x2a7a2a, roughness: 0.8 }));
-    group.add(new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.12, 0.3, 5), bpotMat));
-    group.children[group.children.length - 1].position.set(rx - 0.5, y + 0.9, balcZ);
-    group.add(new THREE.Mesh(new THREE.SphereGeometry(0.25, 5, 5), bplantMat));
-    group.children[group.children.length - 1].position.set(rx - 0.5, y + 1.2, balcZ);
-
-    // Room ceiling light
-    group.add(makeBox(1.2, 0.04, 1.2, ceilPanelMat, rx, y + H - 0.12, rz));
-
-    // === BATHROOM (northwest corner of each room) ===
-    const bathW2 = 3.5, bathD2 = 3.5;
-    const bathX = rx - roomW / 2 + bathW2 / 2 + 0.5;
-    const bathZ2 = rz - roomD / 2 + bathD2 / 2 + 0.5;
-
-    // Bathroom partition wall
-    group.add(makeBox(0.12, wallH2, bathD2, damaskMat, bathX + bathW2 / 2, y + wallH2 / 2, bathZ2));
-    group.add(makeBox(bathW2, wallH2, 0.12, damaskMat, bathX, y + wallH2 / 2, bathZ2 + bathD2 / 2));
-
-    // Bathroom tile floor
-    group.add(makePlane(bathW2 - 0.3, bathD2 - 0.3, tileMat2, bathX, y + 0.22, bathZ2));
-
-    // Toilet
-    group.add(makeBox(0.45, 0.38, 0.55, toiletMat2, bathX - 0.8, y + 0.34, bathZ2 - 0.5));
-    group.add(makeBox(0.4, 0.5, 0.2, toiletMat2, bathX - 0.8, y + 0.4, bathZ2 - 0.85));
-    group.add(makeBox(0.42, 0.04, 0.4, toiletMat2, bathX - 0.8, y + 0.55, bathZ2 - 0.45));
-
-    // Sink + mirror
-    group.add(makeBox(0.6, 0.1, 0.45, toiletMat2, bathX + 0.5, y + 0.85, bathZ2 - 0.8));
-    group.add(makeBox(0.15, 0.85, 0.15, toiletMat2, bathX + 0.5, y + 0.43, bathZ2 - 0.8));
-    group.add(makeBox(0.06, 0.2, 0.06, chromeMat, bathX + 0.5, y + 1.0, bathZ2 - 0.95));
-    group.add(makeBox(0.5, 0.65, 0.04, mirrorMat3, bathX + 0.5, y + 1.5, bathZ2 - 0.97));
   }
 }
-
 // =============================================================================
 // KUMKÖY CITY – Streets, Shops, Restaurants, Neon Lights
 // =============================================================================
@@ -1706,574 +1561,6 @@ function createCity(scene) {
 }
 
 // === OLD createLobbyInterior (kept for reference, no longer called) ===
-function _old_createLobbyInterior(group, width, depth, floorH, name) {
-  const groupX = group.position ? 0 : 0; // local coords within group
-  const marbleMat = getMarbleMat();
-  const isWater = name.includes('Water');
-  const isFun = name.includes('Fun');
-
-  // Accent color per hotel
-  const accentColor = isWater ? 0x1155aa : isFun ? 0xff4488 : 0x44aa88;
-  const accentMat = getCachedMat('accent_' + accentColor, () => new THREE.MeshStandardMaterial({
-    color: accentColor, emissive: accentColor, emissiveIntensity: 0.6, roughness: 0.2,
-  }));
-
-  // === FLOOR (fix z-fighting: y=0.05 + polygonOffset) ===
-  // Lobby floor: Carrara marble with clearcoat
-  const floorBox = makeBox(width - 1, 0.3, depth - 1, getMarbleMat(), 0, 0.15, 0);
-  floorBox.receiveShadow = true;
-  group.add(floorBox);
-
-  // === CEILING (face downward) ===
-  const ceilingMat = getCachedMat('ceiling', () => new THREE.MeshStandardMaterial({ color: 0xf5f0e8, roughness: 0.9, side: THREE.DoubleSide }));
-  const ceilingGeo = new THREE.PlaneGeometry(width - 1, depth - 1);
-  const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
-  ceiling.rotation.x = Math.PI / 2; // face down
-  ceiling.position.set(0, floorH - 0.15, 0);
-  ceiling.receiveShadow = true;
-  group.add(ceiling);
-
-  // === INTERIOR WALLS (textured) – back wall is now SOUTH (+depth/2) ===
-  const wallIntMat = getCachedMat('wall_int', () => new THREE.MeshStandardMaterial({
-    map: textures.damask, color: 0xf8f2e8, roughness: 0.75,
-  }));
-  // === DAMASK WALL PANELS on all 4 interior walls ===
-  const panelH = floorH - 0.5;
-  const panelY = panelH / 2 + 0.3;
-  // South wall (back, closed)
-  group.add(makeBox(width - 2, panelH, 0.06, wallIntMat, 0, panelY, depth / 2 - 0.4));
-  // North wall (entrance side – left and right of door)
-  const doorHalf = (width - 12) / 2; // leave 12m gap for entrance
-  group.add(makeBox(doorHalf, panelH, 0.06, wallIntMat, -(doorHalf / 2 + 6), panelY, -(depth / 2 - 0.4)));
-  group.add(makeBox(doorHalf, panelH, 0.06, wallIntMat, (doorHalf / 2 + 6), panelY, -(depth / 2 - 0.4)));
-  // East wall
-  group.add(makeBox(0.06, panelH, depth - 2, wallIntMat, width / 2 - 0.4, panelY, 0));
-  // West wall
-  group.add(makeBox(0.06, panelH, depth - 2, wallIntMat, -(width / 2 - 0.4), panelY, 0));
-  // Accent strip at bottom of south wall
-  group.add(makeBox(width - 2, 0.8, 0.07, accentMat, 0, 0.4, depth / 2 - 0.5));
-
-  // === RECEPTION DESK (detailed) ===
-  const deskWoodMat = getCachedMat('desk_wood', () => new THREE.MeshPhysicalMaterial({
-    map: textures.woodWalnut, roughness: 0.3, metalness: 0.02,
-    clearcoat: 0.4, clearcoatRoughness: 0.3,
-  }));
-  const deskTopMat = getCachedMat('desk_top', () => new THREE.MeshStandardMaterial({
-    color: 0x2a1a08, roughness: 0.15, metalness: 0.05, envMap, envMapIntensity: 0.3,
-  }));
-  // Desk body – near north entrance, player walks in and sees it
-  group.add(makeBox(10, 1.0, 1.8, deskWoodMat, 0, 0.5, -depth / 2 + 8));
-  // Desk top (polished)
-  group.add(makeBox(10.2, 0.08, 2.0, deskTopMat, 0, 1.04, -depth / 2 + 8));
-  // Desk front accent strip (facing the entering guest)
-  group.add(makeBox(10, 0.1, 0.05, accentMat, 0, 0.8, -depth / 2 + 7.1));
-  // Computer monitors on desk
-  const monitorMat = getCachedMat('monitor', () => new THREE.MeshStandardMaterial({
-    color: 0x111111, roughness: 0.1, metalness: 0.3,
-  }));
-  for (const mx of [-3, 0, 3]) {
-    group.add(makeBox(0.6, 0.4, 0.04, monitorMat, mx, 1.3, -depth / 2 + 8.2));
-    group.add(makeBox(0.5, 0.3, 0.02, new THREE.MeshStandardMaterial({
-      color: 0x88ccff, emissive: 0x88ccff, emissiveIntensity: 0.4,
-    }), mx, 1.3, -depth / 2 + 8.23));
-  }
-
-  // === PILLARS (with base and capital) ===
-  const pillarMat = getCachedMat('pillar_marble', () => new THREE.MeshStandardMaterial({
-    color: 0xe8e0d0, roughness: 0.2, envMap, envMapIntensity: 0.35,
-  }));
-  const spacing = width / 5;
-  for (let i = -1.5; i <= 1.5; i++) {
-    const px = i * spacing;
-    // Base
-    group.add(makeBox(1.2, 0.3, 1.2, pillarMat, px, 0.15, 0));
-    // Shaft
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.4, floorH - 0.6, 8), pillarMat);
-    shaft.position.set(px, floorH / 2, 0);
-    group.add(shaft);
-    // Capital
-    group.add(makeBox(1.2, 0.3, 1.2, pillarMat, px, floorH - 0.15, 0));
-  }
-
-  // === HOTEL LOGO (south back wall) ===
-  group.add(makeBox(8, 2.5, 0.12, accentMat, 0, 2.0, depth / 2 - 0.35));
-  // Logo text backing (lighter)
-  group.add(makeBox(7, 1.5, 0.05, new THREE.MeshStandardMaterial({
-    color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.3,
-  }), 0, 2.0, depth / 2 - 0.42));
-
-  // === SEATING AREA (lobby sofas) ===
-  const sofaColor = isWater ? 0x2a4a6a : 0x6a2a3a;
-  const sofaMat = getCachedMat('sofa_' + (isWater ? 'w' : 'f'), () => new THREE.MeshStandardMaterial({
-    color: sofaColor, roughness: 0.85,
-  }));
-  const sofaLegMat = getCachedMat('sofa_leg', () => new THREE.MeshStandardMaterial({
-    color: 0x3a3a3a, metalness: 0.4, roughness: 0.3,
-  }));
-
-  // Two sofa groups, left and right of lobby center
-  for (const side of [-1, 1]) {
-    const sx = side * (width / 4);
-    const sz = 2; // center of lobby
-    // Sofa seat
-    group.add(makeBox(4, 0.4, 1.2, sofaMat, sx, 0.4, sz));
-    // Sofa back
-    group.add(makeBox(4, 0.5, 0.2, sofaMat, sx, 0.85, sz - 0.5));
-    // Armrests
-    group.add(makeBox(0.2, 0.3, 1.2, sofaMat, sx - 1.9, 0.75, sz));
-    group.add(makeBox(0.2, 0.3, 1.2, sofaMat, sx + 1.9, 0.75, sz));
-    // Legs
-    for (const [lx, lz] of [[-1.8, -0.5], [1.8, -0.5], [-1.8, 0.5], [1.8, 0.5]]) {
-      group.add(makeBox(0.06, 0.2, 0.06, sofaLegMat, sx + lx, 0.1, sz + lz));
-    }
-    // Coffee table in front
-    const tableMat = getCachedMat('ctable', () => new THREE.MeshStandardMaterial({
-      color: 0x3a2a18, roughness: 0.25, envMap, envMapIntensity: 0.3,
-    }));
-    group.add(makeBox(2, 0.05, 1, tableMat, sx, 0.45, sz + 1.2));
-    group.add(makeBox(0.06, 0.4, 0.06, sofaLegMat, sx - 0.9, 0.2, sz + 0.8));
-    group.add(makeBox(0.06, 0.4, 0.06, sofaLegMat, sx + 0.9, 0.2, sz + 0.8));
-    group.add(makeBox(0.06, 0.4, 0.06, sofaLegMat, sx - 0.9, 0.2, sz + 1.6));
-    group.add(makeBox(0.06, 0.4, 0.06, sofaLegMat, sx + 0.9, 0.2, sz + 1.6));
-  }
-
-  // === LOBBY RUG / CARPET (accent color) ===
-  const rugMat = getCachedMat('rug_' + accentColor, () => new THREE.MeshStandardMaterial({
-    color: accentColor, roughness: 0.95,
-    polygonOffset: true, polygonOffsetFactor: -10, polygonOffsetUnits: -10,
-  }));
-  group.add(makePlane(6, 12, rugMat, 0, 0.45, 3));
-
-  // === POTTED PLANTS ===
-  const potMat = getCachedMat('pot', () => new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.7 }));
-  const plantMat = getCachedMat('plant', () => new THREE.MeshStandardMaterial({ color: 0x2a7a2a, roughness: 0.8 }));
-  for (const [px, pz] of [[-width / 3, -depth / 2 + 4], [width / 3, -depth / 2 + 4],
-                           [-width / 4 - 3, depth / 2 - 3], [width / 4 + 3, depth / 2 - 3]]) {
-    // Pot
-    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.25, 0.6, 6), potMat);
-    pot.position.set(px, 0.3, pz);
-    group.add(pot);
-    // Plant sphere
-    const plant = new THREE.Mesh(new THREE.SphereGeometry(0.6, 6, 6), plantMat);
-    plant.position.set(px, 1.0, pz);
-    group.add(plant);
-  }
-
-  // === STAIRCASE (right side of lobby, goes to floor 2) ===
-  const stairW = 3;
-  const stairDepth = depth * 0.6;
-  const stairX = width / 2 - stairW - 1; // against east wall
-  const stairStartZ = -depth / 2 + 4;
-  const stepCount = 16;
-  const stepH = floorH / stepCount;
-  const stepD = stairDepth / stepCount;
-
-  const stairMat = getCachedMat('stair_marble', () => new THREE.MeshStandardMaterial({
-    map: textures.lobbyFloor, roughness: 0.3, envMap, envMapIntensity: 0.2,
-  }));
-  const railMat = getCachedMat('railing', () => new THREE.MeshStandardMaterial({
-    color: 0xcccccc, metalness: 0.6, roughness: 0.2,
-  }));
-
-  // Stairwell walls (enclose the staircase so it doesn't clip through rooms)
-  const stairwellMat = getCachedMat('stairwell', () => new THREE.MeshStandardMaterial({
-    map: textures.wall, color: 0xf0ebe0, roughness: 0.85,
-  }));
-  const swWallH = floorH * 2; // full double-height
-  // West wall of stairwell (separates stairs from lobby)
-  group.add(makeBox(0.15, swWallH, stairDepth + 2, stairwellMat,
-    stairX - stairW / 2 - 0.1, swWallH / 2, stairStartZ + stairDepth / 2));
-  // South wall of stairwell (closes off the top)
-  group.add(makeBox(stairW + 0.5, swWallH, 0.15, stairwellMat,
-    stairX, swWallH / 2, stairStartZ + stairDepth + 1));
-  // North wall of stairwell (bottom, with opening for entry)
-  const stairEntryH = 2.5;
-  group.add(makeBox(stairW + 0.5, swWallH - stairEntryH, 0.15, stairwellMat,
-    stairX, stairEntryH + (swWallH - stairEntryH) / 2, stairStartZ - 0.5));
-
-  // Steps
-  for (let s = 0; s < stepCount; s++) {
-    const stepY = (s + 0.5) * stepH;
-    const stepZ = stairStartZ + s * stepD;
-    const step = makeBox(stairW, stepH, stepD, stairMat, stairX, stepY, stepZ);
-    step.receiveShadow = true;
-    group.add(step);
-  }
-
-  // Stair railing (inner/west side)
-  const railLen = Math.sqrt(stairDepth * stairDepth + floorH * floorH);
-  const railOuter = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.04, 0.04, railLen, 4), railMat
-  );
-  railOuter.position.set(stairX - stairW / 2 + 0.3, floorH / 2, stairStartZ + stairDepth / 2);
-  railOuter.rotation.x = Math.atan2(floorH, stairDepth);
-  group.add(railOuter);
-
-  // Railing posts
-  for (let s = 0; s <= stepCount; s += 4) {
-    const postY = s * stepH;
-    const postZ = stairStartZ + s * stepD;
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1, 4), railMat);
-    post.position.set(stairX - stairW / 2 + 0.3, postY + 0.5, postZ);
-    group.add(post);
-  }
-
-  // === SECOND FLOOR with rooms ===
-  createSecondFloor(group, width, depth, floorH, name);
-
-  // === CHANDELIER (center of lobby) ===
-  const chandelierMat = getCachedMat('chandelier', () => new THREE.MeshStandardMaterial({
-    color: 0xddcc88, metalness: 0.6, roughness: 0.2,
-  }));
-  const chandelierGlow = new THREE.MeshStandardMaterial({
-    color: 0xffffee, emissive: 0xffffcc, emissiveIntensity: 0.8,
-  });
-  // Main ring
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.06, 8, 16), chandelierMat);
-  ring.position.set(0, floorH - 0.5, 0);
-  ring.rotation.x = Math.PI / 2;
-  group.add(ring);
-  // Support rod
-  const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 4), chandelierMat);
-  rod.position.set(0, floorH - 0.25, 0);
-  group.add(rod);
-  // Light bulbs around ring
-  for (let i = 0; i < 8; i++) {
-    const angle = (i / 8) * Math.PI * 2;
-    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), chandelierGlow);
-    bulb.position.set(Math.cos(angle) * 1.5, floorH - 0.5, Math.sin(angle) * 1.5);
-    group.add(bulb);
-  }
-
-  // === HOTEL-SPECIFIC LOBBY FEATURES ===
-  if (isFun) {
-    // DFW: Split-level indicator – raised platform on west side (Upper Lobby)
-    const upperMat = getCachedMat('upper_lobby', () => new THREE.MeshStandardMaterial({
-      map: textures.lobbyFloor, roughness: 0.25, color: 0xd8d0c0,
-    }));
-    const upperW = width / 3;
-    const upperH = 0.5; // 50cm raised
-    group.add(makeBox(upperW, upperH, depth / 2 - 2, upperMat, -width / 2 + upperW / 2 + 1, upperH / 2 + 0.3, depth / 4));
-    // Step up
-    group.add(makeBox(upperW, 0.08, 0.6, getCachedMat('step_edge', () =>
-      new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.3 })),
-      -width / 2 + upperW / 2 + 1, 0.6, 0));
-
-    // Library corner (bookshelf on upper level)
-    const shelfMat = getCachedMat('bookshelf', () => new THREE.MeshStandardMaterial({ color: 0x3a2818, roughness: 0.5 }));
-    const bookMat = getCachedMat('books', () => new THREE.MeshStandardMaterial({ color: 0x8a4422, roughness: 0.8 }));
-    const shelfX = -width / 2 + 2;
-    group.add(makeBox(0.3, floorH - 1, 2.5, shelfMat, shelfX, floorH / 2, depth / 4 + 3));
-    // Book rows
-    for (let row = 0; row < 4; row++) {
-      group.add(makeBox(0.25, 0.25, 2.3, bookMat, shelfX + 0.05, 1.2 + row * 0.9, depth / 4 + 3));
-    }
-
-    // Reading chair
-    const chairMat = getCachedMat('readchair', () => new THREE.MeshStandardMaterial({ color: 0x6a4a2a, roughness: 0.8 }));
-    group.add(makeBox(0.8, 0.4, 0.8, chairMat, shelfX + 1.5, 0.8 + 0.2, depth / 4 + 3));
-    group.add(makeBox(0.8, 0.5, 0.15, chairMat, shelfX + 1.5, 1.0 + 0.2, depth / 4 + 2.65));
-
-    // LED strip along upper lobby edge (motion-sensor style)
-    const ledFloor = new THREE.MeshStandardMaterial({
-      color: 0xffffff, emissive: 0xeeeeff, emissiveIntensity: 0.4,
-    });
-    group.add(makeBox(upperW, 0.05, 0.1, ledFloor, -width / 2 + upperW / 2 + 1, 0.82, 0.1));
-
-  } else if (isWater) {
-    // DWW: Wave Bar area – curved bar counter near back wall
-    const barMat = getCachedMat('bar_counter', () => new THREE.MeshStandardMaterial({
-      color: 0x2a2a3a, roughness: 0.2, metalness: 0.1, envMap, envMapIntensity: 0.4,
-    }));
-    const barX = -width / 3;
-    const barZ = depth / 2 - 4;
-    // Bar counter (L-shape)
-    group.add(makeBox(6, 1.1, 0.8, barMat, barX, 0.7, barZ));
-    group.add(makeBox(0.8, 1.1, 3, barMat, barX + 3.4, 0.7, barZ - 1.5));
-    // Bar top (polished)
-    const barTopMat = getCachedMat('bartop', () => new THREE.MeshStandardMaterial({
-      color: 0x1a1a2a, roughness: 0.08, metalness: 0.15, envMap, envMapIntensity: 0.5,
-    }));
-    group.add(makeBox(6.2, 0.06, 1.0, barTopMat, barX, 1.27, barZ));
-    group.add(makeBox(1.0, 0.06, 3.2, barTopMat, barX + 3.4, 1.27, barZ - 1.5));
-
-    // Bar stools (3)
-    const stoolMat = getCachedMat('stool', () => new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.4 }));
-    for (let i = 0; i < 3; i++) {
-      const sx = barX - 2 + i * 2;
-      // Pole
-      group.add(makeBox(0.06, 0.7, 0.06, stoolMat, sx, 0.5, barZ + 0.8));
-      // Seat
-      const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.18, 0.08, 6), stoolMat);
-      seat.position.set(sx, 0.88, barZ + 0.8);
-      group.add(seat);
-    }
-
-    // "Wave" decorative wall panel (wavy emissive blue strip on back wall)
-    const waveMat = new THREE.MeshStandardMaterial({
-      color: 0x1155aa, emissive: 0x1155aa, emissiveIntensity: 0.4,
-    });
-    for (let i = 0; i < 8; i++) {
-      const wx = -width / 3 + i * (width / 12);
-      const wy = 2.5 + Math.sin(i * 0.8) * 0.4;
-      group.add(makeBox(width / 14, 0.15, 0.05, waveMat, wx, wy, depth / 2 - 0.35));
-    }
-  }
-
-  // === INTERIOR LIGHTING: Multiple PointLights + Emissive Panels ===
-  // Simple, fast, looks good: 4 PointLights spread across lobby + emissive deco
-
-  // Ceiling light panels (emissive visual)
-  const ceilPanelMat = getCachedMat('ceil_panel', () => new THREE.MeshStandardMaterial({
-    color: 0xfff8f0, emissive: 0xfff5e8, emissiveIntensity: 1.5, roughness: 0.2,
-    side: THREE.DoubleSide,
-  }));
-
-  // 3 PointLights spread across lobby + emissive panel above each
-  const lightGrid = [
-    { x: 0, z: -depth / 4, int: 2.5 },      // front (near entrance)
-    { x: -width / 4, z: 0, int: 2.0 },       // center-left
-    { x:  width / 4, z: depth / 4, int: 1.8 }, // back-right
-  ];
-  for (const lg of lightGrid) {
-    // PointLight as pendant lamp (1.5m below ceiling for proper light distribution)
-    const pl = new THREE.PointLight(0xfff0dd, lg.int, 45);
-    pl.position.set(lg.x, floorH - 1.5, lg.z);
-    pl._dayIntensity = lg.int;
-    group.add(pl);
-    lobbyLights.push(pl);
-    // Emissive ceiling panel (stays at ceiling)
-    group.add(makeBox(3.5, 0.06, 1.2, ceilPanelMat, lg.x, floorH - 0.08, lg.z));
-    // Pendant rod connecting panel to light
-    group.add(makeBox(0.03, 1.4, 0.03, getCachedMat('pendant_rod', () =>
-      new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.5 })),
-      lg.x, floorH - 0.75, lg.z));
-  }
-
-  // Extra emissive panels between lights (visual only, no PointLight)
-  for (let r = 0; r < 2; r++) {
-    const pz = -depth / 4 + r * depth / 2;
-    group.add(makeBox(3.5, 0.06, 1.2, ceilPanelMat, 0, floorH - 0.08, pz));
-  }
-
-  // Wall sconces (emissive visual)
-  const sconceMat = getCachedMat('sconce', () => new THREE.MeshStandardMaterial({
-    color: 0xffe8c8, emissive: 0xffd8a0, emissiveIntensity: 0.6, roughness: 0.3,
-  }));
-  const sconceBackMat = getCachedMat('sconce_back', () =>
-    new THREE.MeshStandardMaterial({ color: 0x3a3a3a, metalness: 0.3, roughness: 0.4 }));
-  for (const side of [-1, 1]) {
-    for (const zOff of [-depth / 4, depth / 4]) {
-      const wx = side * (width / 2 - 0.55);
-      group.add(makeBox(0.06, 0.5, 1.0, sconceMat, wx, 2.8, zOff));
-      group.add(makeBox(0.04, 0.7, 1.2, sconceBackMat, wx, 2.8, zOff));
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Second floor – hallway with hotel rooms, beds, bathroom
-// ---------------------------------------------------------------------------
-function createSecondFloor(group, width, depth, floorH, name) {
-  const y = floorH; // floor level of 2nd story
-  const isWater = name.includes('Water');
-
-  // === FLOOR SLAB (southern half, with stairwell opening) ===
-  const floorMat = getCachedMat('floor2', () => new THREE.MeshStandardMaterial({
-    map: textures.lobbyFloor, roughness: 0.3,
-  }));
-  const floor2Z = depth / 4;
-  const floor2Depth = depth / 2 - 2;
-
-  // Stairwell opening dimensions (must match staircase in lobby)
-  const stairW2 = 3;
-  const stairX2 = width / 2 - stairW2 - 1;
-  const stairOpenZ = -depth / 2 + 4; // where stairs start
-  const stairOpenDepth = depth * 0.6 + 2; // stair depth + margin
-
-  // Floor slab LEFT of stairwell (main area)
-  const leftW = stairX2 - stairW2 / 2 - 1 + width / 2;
-  if (leftW > 1) {
-    const leftX = -width / 2 + 1 + leftW / 2;
-    const fb1 = makeBox(leftW, 0.3, floor2Depth, floorMat, leftX, y, floor2Z);
-    fb1.receiveShadow = true;
-    group.add(fb1);
-  }
-
-  // Floor slab behind stairwell (south of stair opening)
-  const behindZ = stairOpenZ + stairOpenDepth;
-  const behindDepth = floor2Z + floor2Depth / 2 - behindZ;
-  if (behindDepth > 1) {
-    const fb2 = makeBox(width - 2, 0.3, behindDepth, floorMat, 0, y, behindZ + behindDepth / 2);
-    fb2.receiveShadow = true;
-    group.add(fb2);
-  }
-
-  // Small strip to the right of stairwell (between stair and east wall)
-  const rightStripW = width / 2 - 1 - (stairX2 + stairW2 / 2 + 0.5);
-  if (rightStripW > 0.5) {
-    const rightX = stairX2 + stairW2 / 2 + 0.5 + rightStripW / 2;
-    const fb3 = makeBox(rightStripW, 0.3, floor2Depth, floorMat, rightX, y, floor2Z);
-    fb3.receiveShadow = true;
-    group.add(fb3);
-  }
-
-  // Ceiling of 2nd floor
-  const ceilMat = getCachedMat('ceiling', () => new THREE.MeshStandardMaterial({ color: 0xf5f0e8, roughness: 0.9, side: THREE.DoubleSide }));
-  const ceil2 = new THREE.Mesh(new THREE.PlaneGeometry(width - 2, floor2Depth), ceilMat);
-  ceil2.rotation.x = Math.PI / 2;
-  ceil2.position.set(0, y + floorH - 0.15, floor2Z);
-  group.add(ceil2);
-
-  // === HALLWAY (runs east-west along the center) ===
-  const hallW = width - 4;
-  const hallD = 3; // 3m wide corridor
-  const hallZ = floor2Z - floor2Depth / 2 + hallD / 2 + 1; // near north edge of 2nd floor
-
-  // Carpet runner in hallway
-  const carpetMat = getCachedMat('carpet2', () => new THREE.MeshStandardMaterial({
-    color: isWater ? 0x1a3a5a : 0x5a1a2a, roughness: 0.95,
-    polygonOffset: true, polygonOffsetFactor: -10, polygonOffsetUnits: -10,
-  }));
-  group.add(makePlane(hallW - 2, hallD - 0.5, carpetMat, 0, y + 0.25, hallZ));
-
-  // Hallway ceiling light panels (emissive, no PointLight needed)
-  const hallPanelMat = getCachedMat('ceil_panel', () => new THREE.MeshStandardMaterial({
-    color: 0xfff8f0, emissive: 0xfff5e8, emissiveIntensity: 0.7, roughness: 0.3,
-    side: THREE.DoubleSide,
-  }));
-  for (let hx = -hallW / 3; hx <= hallW / 3; hx += hallW / 3) {
-    group.add(makeBox(3, 0.05, 1.2, hallPanelMat, hx, y + floorH - 0.12, hallZ));
-  }
-  // Single PointLight for depth
-  const hl = new THREE.PointLight(0xfff5e0, 1.0, 25);
-  hl.position.set(0, y + floorH - 1.5, hallZ);
-  hl._dayIntensity = 1.0;
-  lobbyLights.push(hl);
-  group.add(hl);
-
-  // === ROOMS (4 rooms along the south side, doors opening to hallway) ===
-  const roomCount = 3; // reduced from 4 for performance
-  const roomW = (hallW - 2) / roomCount;
-  const roomD = floor2Depth - hallD - 2;
-  const roomZ = hallZ + hallD / 2 + roomD / 2 + 0.5; // south of hallway
-
-  const wallRoomMat = getCachedMat('wall_room', () => new THREE.MeshStandardMaterial({
-    map: textures.damask, color: 0xf5f0e5, roughness: 0.8,
-  }));
-  const doorFrameMat = getCachedMat('doorframe', () => new THREE.MeshStandardMaterial({
-    color: 0x4a3a2a, roughness: 0.4,
-  }));
-
-  for (let r = 0; r < roomCount; r++) {
-    const rx = -hallW / 2 + 1 + r * roomW + roomW / 2;
-    const doorW = 1.2;
-    const doorH = 2.2;
-    const wallH = floorH - 0.5;
-
-    // North wall of room (facing hallway) with door opening
-    const nwSegW = (roomW - doorW) / 2 - 0.1;
-    // Left of door
-    group.add(makeBox(nwSegW, wallH, 0.15, wallRoomMat, rx - roomW / 2 + nwSegW / 2 + 0.05, y + wallH / 2, hallZ + hallD / 2));
-    // Right of door
-    group.add(makeBox(nwSegW, wallH, 0.15, wallRoomMat, rx + roomW / 2 - nwSegW / 2 - 0.05, y + wallH / 2, hallZ + hallD / 2));
-    // Above door
-    group.add(makeBox(doorW + 0.2, wallH - doorH, 0.15, wallRoomMat, rx, y + doorH + (wallH - doorH) / 2, hallZ + hallD / 2));
-    // Door frame
-    group.add(makeBox(0.08, doorH, 0.2, doorFrameMat, rx - doorW / 2, y + doorH / 2, hallZ + hallD / 2));
-    group.add(makeBox(0.08, doorH, 0.2, doorFrameMat, rx + doorW / 2, y + doorH / 2, hallZ + hallD / 2));
-
-    // Side walls between rooms (except at room edges which use building walls)
-    if (r < roomCount - 1) {
-      group.add(makeBox(0.15, wallH, roomD, wallRoomMat, rx + roomW / 2, y + wallH / 2, roomZ));
-    }
-
-    // === ROOM FURNITURE ===
-
-    // Room floor (laminate, warmer than hallway tile)
-    const laminateMat = getCachedMat('laminate', () => new THREE.MeshStandardMaterial({
-      color: 0xc8a882, roughness: 0.45, // warm wood-tone laminate
-      polygonOffset: true, polygonOffsetFactor: -12, polygonOffsetUnits: -12,
-    }));
-    group.add(makePlane(roomW - 0.5, roomD - 0.3, laminateMat, rx, y + 0.22, roomZ));
-
-    // Bed (double bed)
-    const bedMat = getCachedMat('bedsheet', () => new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.9 }));
-    const bedFrameMat = getCachedMat('bedframe', () => new THREE.MeshStandardMaterial({ map: textures.woodOak, roughness: 0.4 }));
-    // Frame
-    group.add(makeBox(2.2, 0.35, 2.0, bedFrameMat, rx, y + 0.32, roomZ + roomD / 2 - 1.5));
-    // Mattress
-    group.add(makeBox(2.0, 0.2, 1.8, bedMat, rx, y + 0.55, roomZ + roomD / 2 - 1.5));
-    // Pillow (single wide)
-    group.add(makeBox(1.2, 0.12, 0.35, bedMat, rx, y + 0.72, roomZ + roomD / 2 - 2.2));
-    // Headboard
-    group.add(makeBox(2.2, 0.8, 0.1, bedFrameMat, rx, y + 0.85, roomZ + roomD / 2 - 2.35));
-
-    // Nightstand (one side)
-    const nightMat = getCachedMat('nightstand', () => new THREE.MeshStandardMaterial({ map: textures.woodWalnut, roughness: 0.35 }));
-    group.add(makeBox(0.5, 0.5, 0.4, nightMat, rx + 1.4, y + 0.4, roomZ + roomD / 2 - 2.0));
-    // Lamp on nightstand
-    const lampGlow = getCachedMat('roomlamp', () => new THREE.MeshStandardMaterial({
-      color: 0xffeecc, emissive: 0xffddaa, emissiveIntensity: 0.6,
-    }));
-    group.add(makeBox(0.15, 0.3, 0.15, lampGlow, rx + 1.4, y + 0.8, roomZ + roomD / 2 - 2.0));
-
-    // Window (south wall – opening to outside, glass pane)
-    const glassMat = getGlassMat();
-    group.add(makeBox(1.5, 1.2, 0.08, glassMat, rx, y + 1.5, roomZ + roomD / 2 - 0.1));
-
-    // Room ceiling light panel (larger emissive area for better illumination)
-    const ceilLampMat = getCachedMat('ceillamp', () => new THREE.MeshStandardMaterial({
-      color: 0xfff8f0, emissive: 0xfff0dd, emissiveIntensity: 0.5,
-      side: THREE.DoubleSide,
-    }));
-    group.add(makeBox(1.5, 0.04, 1.5, ceilLampMat, rx, y + floorH - 0.15, roomZ));
-    // Bounce glow on floor
-    const roomBounceMat = getCachedMat('bounce_floor', () => new THREE.MeshStandardMaterial({
-      color: 0xfff0dd, emissive: 0xeee0c8, emissiveIntensity: 0.3, roughness: 0.9,
-      transparent: true, opacity: 0.3,
-      polygonOffset: true, polygonOffsetFactor: -14, polygonOffsetUnits: -14,
-    }));
-    group.add(makePlane(2.5, 2.5, roomBounceMat, rx, y + 0.28, roomZ));
-
-    // === BATHROOM (only in room 0 and room 2) ===
-    if (r === 0) { // only 1 bathroom (performance)
-      const bathX = rx - roomW / 2 + 1.5;
-      const bathZ = roomZ - roomD / 2 + 1.5;
-      const bathW = 2.5;
-      const bathD = 2.5;
-
-      // Bathroom partition wall
-      group.add(makeBox(0.12, wallH, bathD, wallRoomMat, bathX + bathW / 2, y + wallH / 2, bathZ));
-      // Bathroom door opening (just leave gap, no wall on hall side)
-
-      // Toilet + Sink (detailed LatheGeometry models)
-      const ceramicM = getCachedMat('ceramic_white', () => new THREE.MeshStandardMaterial({
-        color: 0xf2f2f0, roughness: 0.15, metalness: 0.02, envMap, envMapIntensity: 0.3,
-      }));
-      const chromeM = getCachedMat('chrome', () => new THREE.MeshStandardMaterial({
-        color: 0xcccccc, metalness: 0.9, roughness: 0.05, envMap, envMapIntensity: 0.6,
-      }));
-      const mirrorM = getCachedMat('mirror', () => new THREE.MeshStandardMaterial({
-        color: 0xaabbcc, roughness: 0.02, metalness: 0.8, envMap, envMapIntensity: 1.0,
-      }));
-      createToilet(group, bathX - 0.5, y, bathZ - 0.5, ceramicM, chromeM);
-      createSink(group, bathX + 0.5, y, bathZ - 0.8, ceramicM, chromeM, mirrorM);
-
-      // Bathroom floor tile (different from main floor)
-      const bathFloorMat = getCachedMat('bathfloor', () => new THREE.MeshStandardMaterial({
-        color: 0xd8d0c8, roughness: 0.25,
-        polygonOffset: true, polygonOffsetFactor: -12, polygonOffsetUnits: -12,
-      }));
-      group.add(makePlane(bathW, bathD, bathFloorMat, bathX, y + 0.24, bathZ));
-    }
-  }
-
-  // Hallway back wall (south end, above the rooms)
-  group.add(makeBox(hallW, floorH - 0.5, 0.15, wallRoomMat, 0, y + floorH / 2 - 0.1, floor2Z + floor2Depth / 2 - 0.1));
-}
-
-// Register stair floors after building is placed in scene
 function registerStairFloors(x, z, width, depth, floorH) {
   // New staircase: east side, 20 steps per flight, 2 flights (EG→1OG, 1OG→2OG)
   const stairW = 3.5;
