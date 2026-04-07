@@ -1837,17 +1837,7 @@ function createPoolWaterMaterial() {
       uNormal1: { value: getPoolNormals() },
       uNormal2: { value: getPoolNormals2() },
       uEnvMap: { value: envMap },
-      uWaterColor: { value: new THREE.Color(0x006994) },
-      uOpacity: { value: 0.88 },
-      uFresnelPower: { value: 4.0 },
-      uReflectivity: { value: 0.55 },
-      uNormalStrength: { value: 0.35 },
-      uCausticIntensity: { value: 0.12 },
-      // Dual normal map scales + flow directions
-      uScale1: { value: new THREE.Vector2(6, 6) },
-      uScale2: { value: new THREE.Vector2(14, 14) },
-      uFlow1: { value: new THREE.Vector2(0.035, 0.025) },
-      uFlow2: { value: new THREE.Vector2(-0.02, 0.04) },
+      uSunDir: { value: new THREE.Vector3(0.5, 0.7, 0.4).normalize() },
     },
     vertexShader: `
       varying vec2 vUv;
@@ -1865,36 +1855,51 @@ function createPoolWaterMaterial() {
       uniform float uTime;
       uniform sampler2D uNormal1, uNormal2;
       uniform samplerCube uEnvMap;
-      uniform vec3 uWaterColor;
-      uniform float uOpacity, uFresnelPower, uReflectivity, uNormalStrength, uCausticIntensity;
-      uniform vec2 uScale1, uScale2, uFlow1, uFlow2;
+      uniform vec3 uSunDir;
 
       varying vec2 vUv;
       varying vec3 vWorldPos;
       varying vec3 vViewDir;
 
       void main() {
-        // Dual scrolling normal maps (different scales + directions = organic ripples)
-        vec2 uv1 = vUv * uScale1 + uTime * uFlow1;
-        vec2 uv2 = vUv * uScale2 + uTime * uFlow2;
+        // === DUAL NORMAL MAPS (different scales + scroll directions) ===
+        vec2 uv1 = vWorldPos.xz * 0.08 + uTime * vec2(0.012, 0.009);
+        vec2 uv2 = vWorldPos.xz * 0.18 + uTime * vec2(-0.008, 0.014);
         vec3 n1 = texture2D(uNormal1, uv1).xyz * 2.0 - 1.0;
         vec3 n2 = texture2D(uNormal2, uv2).xyz * 2.0 - 1.0;
-        vec3 normal = normalize(vec3((n1.xy + n2.xy) * uNormalStrength, 1.0));
+        // Combine normals: perturb the up-vector (0,1,0) by normal map XY
+        vec3 N = normalize(vec3((n1.x + n2.x) * 0.25, 1.0, (n1.y + n2.y) * 0.25));
 
-        // Fresnel reflection (angle-dependent: steep = see floor, grazing = see sky)
-        float fresnel = pow(1.0 - max(dot(vViewDir, vec3(normal.x, 1.0, normal.y)), 0.0), uFresnelPower);
-        vec3 reflDir = reflect(-vViewDir, normalize(vec3(normal.x, 1.0, normal.y)));
+        // === FRESNEL (Schlick approximation) ===
+        float cosTheta = max(dot(vViewDir, N), 0.0);
+        float R0 = 0.02; // water IOR ~1.33
+        float fresnel = R0 + (1.0 - R0) * pow(1.0 - cosTheta, 5.0);
+
+        // === REFLECTION (env map) ===
+        vec3 reflDir = reflect(-vViewDir, N);
         vec3 reflected = textureCube(uEnvMap, reflDir).rgb;
 
-        // Caustic shimmer (two layers of animated sin patterns)
-        vec2 cp = vWorldPos.xz * 0.4;
-        float c1 = smoothstep(0.35, 0.0, abs(sin(cp.x * 12.0 + uTime * 2.0) * cos(cp.y * 11.0 - uTime * 1.4)) - 0.25);
-        float c2 = smoothstep(0.35, 0.0, abs(sin(cp.x * 8.0 - uTime * 1.1) * cos(cp.y * 9.5 + uTime * 0.8)) - 0.25);
-        float caustic = (c1 + c2) * 0.5 * uCausticIntensity;
+        // === BASE WATER COLOR (bright pool turquoise with depth tint) ===
+        vec3 shallow = vec3(0.15, 0.75, 0.85); // bright turquoise
+        vec3 deep = vec3(0.02, 0.30, 0.55);    // deeper blue
+        float depthMix = smoothstep(0.3, 0.9, cosTheta); // steep = shallow, grazing = deep
+        vec3 waterColor = mix(deep, shallow, depthMix);
 
-        // Combine: water color + reflection + caustic highlight
-        vec3 color = mix(uWaterColor + caustic, reflected, fresnel * uReflectivity);
-        gl_FragColor = vec4(color, uOpacity);
+        // === SPECULAR HIGHLIGHT (sun glint) ===
+        vec3 halfVec = normalize(vViewDir + uSunDir);
+        float spec = pow(max(dot(N, halfVec), 0.0), 256.0) * 1.5;
+
+        // === CAUSTICS (subtle animated light patterns) ===
+        vec2 cp = vWorldPos.xz * 0.5;
+        float c1 = smoothstep(0.3, 0.0, abs(sin(cp.x * 14.0 + uTime * 1.8) * cos(cp.y * 13.0 - uTime * 1.2)) - 0.22);
+        float c2 = smoothstep(0.3, 0.0, abs(sin(cp.x * 9.0 - uTime * 0.9) * cos(cp.y * 10.5 + uTime * 0.7)) - 0.22);
+        float caustic = (c1 + c2) * 0.08;
+
+        // === COMBINE ===
+        vec3 color = mix(waterColor + caustic, reflected, fresnel * 0.7);
+        color += vec3(1.0, 0.95, 0.85) * spec; // sun glint (warm white)
+
+        gl_FragColor = vec4(color, 0.90);
       }
     `,
     transparent: true,
