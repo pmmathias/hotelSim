@@ -1929,17 +1929,21 @@ const waterMeshes2 = [];    // Water addon pools (planar reflection)
 
 function createPool(scene, x, z, w, d) {
   // ALL pools use Water addon (same ocean shader look everywhere)
+  // Scale 'size' by pool area so small pools don't look choppier than large ones
+  const poolArea = w * d;
+  const sizeScale = Math.max(0.3, Math.min(2.0, Math.sqrt(poolArea) / 20));
   const waterSurface = new Water(new THREE.PlaneGeometry(w, d), {
     textureWidth: 512,
     textureHeight: 512,
     waterNormals: getWaterNormals(),
     sunDirection: new THREE.Vector3(0.5, 0.7, 0.4).normalize(),
     sunColor: 0xffffff,
-    waterColor: 0x001e0f,
-    distortionScale: 2.5,
+    waterColor: 0x0a5e6e,  // inviting turquoise-blue
+    distortionScale: 2.5 * sizeScale,
     fog: false,
     alpha: 0.9,
   });
+  waterSurface.material.uniforms['size'].value = sizeScale;
   waterSurface.rotation.x = -Math.PI / 2;
   waterSurface.position.set(x, 0.35, z);
   scene.add(waterSurface);
