@@ -295,111 +295,103 @@ function getMarbleMat() {
 
 // ── Detailed toilet model (LatheGeometry bowl + cylinder tank) ──────────
 function createToilet(group, x, y, z, ceramicMat, chromeMat) {
-  // Bowl: LatheGeometry profile (side cross-section of a toilet bowl)
+  // All positions offset by +0.3 so toilet sits ON the floor surface (not inside it)
+  const fy = y + 0.3;
+  // Bowl: LatheGeometry profile
   const bowlPts = [
-    new THREE.Vector2(0.0, 0.0),    // bottom center
-    new THREE.Vector2(0.18, 0.0),   // bottom edge
-    new THREE.Vector2(0.22, 0.05),  // lower curve
-    new THREE.Vector2(0.23, 0.15),  // mid wall
-    new THREE.Vector2(0.22, 0.28),  // upper wall
-    new THREE.Vector2(0.24, 0.32),  // rim lip outward
-    new THREE.Vector2(0.21, 0.35),  // rim top
-    new THREE.Vector2(0.17, 0.33),  // rim inner
-    new THREE.Vector2(0.12, 0.28),  // inner bowl
-    new THREE.Vector2(0.05, 0.12),  // inner bottom curve
-    new THREE.Vector2(0.0, 0.08),   // drain center
+    new THREE.Vector2(0.0, 0.0),
+    new THREE.Vector2(0.18, 0.0),
+    new THREE.Vector2(0.22, 0.05),
+    new THREE.Vector2(0.23, 0.15),
+    new THREE.Vector2(0.22, 0.28),
+    new THREE.Vector2(0.24, 0.32),
+    new THREE.Vector2(0.21, 0.35),
+    new THREE.Vector2(0.17, 0.33),
+    new THREE.Vector2(0.12, 0.28),
+    new THREE.Vector2(0.05, 0.12),
+    new THREE.Vector2(0.0, 0.08),
   ];
   const bowlGeo = new THREE.LatheGeometry(bowlPts, 16);
   const bowl = new THREE.Mesh(bowlGeo, ceramicMat);
-  bowl.position.set(x, y, z);
+  bowl.position.set(x, fy, z);
   bowl.receiveShadow = true;
   group.add(bowl);
 
-  // Seat (torus ring on top of bowl)
-  const seatGeo = new THREE.TorusGeometry(0.2, 0.025, 6, 16);
-  const seat = new THREE.Mesh(seatGeo, ceramicMat);
-  seat.position.set(x, y + 0.36, z);
+  // Seat
+  const seat = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.025, 6, 16), ceramicMat);
+  seat.position.set(x, fy + 0.36, z);
   seat.rotation.x = Math.PI / 2;
   group.add(seat);
 
-  // Tank (rounded cylinder behind bowl)
-  const tankGeo = new THREE.CylinderGeometry(0.16, 0.18, 0.4, 12);
-  const tank = new THREE.Mesh(tankGeo, ceramicMat);
-  tank.position.set(x, y + 0.35, z - 0.28);
+  // Tank
+  const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.4, 12), ceramicMat);
+  tank.position.set(x, fy + 0.35, z - 0.28);
   tank.receiveShadow = true;
   group.add(tank);
 
-  // Tank lid (slightly wider disc)
-  const lidGeo = new THREE.CylinderGeometry(0.19, 0.19, 0.03, 12);
-  const lid = new THREE.Mesh(lidGeo, ceramicMat);
-  lid.position.set(x, y + 0.56, z - 0.28);
+  // Tank lid
+  const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.03, 12), ceramicMat);
+  lid.position.set(x, fy + 0.56, z - 0.28);
   group.add(lid);
 
-  // Flush handle (small chrome cylinder)
-  const handleGeo = new THREE.CylinderGeometry(0.012, 0.012, 0.1, 4);
-  const handle = new THREE.Mesh(handleGeo, chromeMat);
-  handle.position.set(x + 0.15, y + 0.5, z - 0.28);
+  // Flush handle
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.1, 4), chromeMat);
+  handle.position.set(x + 0.15, fy + 0.5, z - 0.28);
   handle.rotation.z = Math.PI / 2;
   group.add(handle);
 }
 
 // ── Detailed sink model (LatheGeometry basin + pedestal) ────────────────
 function createSink(group, x, y, z, ceramicMat, chromeMat, mirrorMat) {
-  // Basin: LatheGeometry (bowl shape, wider than tall)
+  // All positions offset by +0.3 so sink sits ON the floor surface
+  const fy = y + 0.3;
+  // Basin: LatheGeometry
   const basinPts = [
-    new THREE.Vector2(0.0, 0.0),    // drain center
-    new THREE.Vector2(0.08, 0.01),  // drain edge
-    new THREE.Vector2(0.20, 0.04),  // inner bottom
-    new THREE.Vector2(0.26, 0.10),  // inner wall
-    new THREE.Vector2(0.28, 0.14),  // rim inner
-    new THREE.Vector2(0.30, 0.16),  // rim top
-    new THREE.Vector2(0.28, 0.13),  // rim outer
-    new THREE.Vector2(0.25, 0.10),  // outer wall
-    new THREE.Vector2(0.22, 0.02),  // outer bottom
-    new THREE.Vector2(0.0, 0.0),    // close bottom
+    new THREE.Vector2(0.0, 0.0),
+    new THREE.Vector2(0.08, 0.01),
+    new THREE.Vector2(0.20, 0.04),
+    new THREE.Vector2(0.26, 0.10),
+    new THREE.Vector2(0.28, 0.14),
+    new THREE.Vector2(0.30, 0.16),
+    new THREE.Vector2(0.28, 0.13),
+    new THREE.Vector2(0.25, 0.10),
+    new THREE.Vector2(0.22, 0.02),
+    new THREE.Vector2(0.0, 0.0),
   ];
-  const basinGeo = new THREE.LatheGeometry(basinPts, 16);
-  const basin = new THREE.Mesh(basinGeo, ceramicMat);
-  basin.position.set(x, y + 0.75, z);
+  const basin = new THREE.Mesh(new THREE.LatheGeometry(basinPts, 16), ceramicMat);
+  basin.position.set(x, fy + 0.75, z);
   basin.receiveShadow = true;
   group.add(basin);
 
-  // Pedestal (tapered cylinder from floor to basin)
-  const pedGeo = new THREE.CylinderGeometry(0.08, 0.12, 0.75, 8);
-  const ped = new THREE.Mesh(pedGeo, ceramicMat);
-  ped.position.set(x, y + 0.375, z);
+  // Pedestal
+  const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 0.75, 8), ceramicMat);
+  ped.position.set(x, fy + 0.375, z);
   ped.receiveShadow = true;
   group.add(ped);
 
-  // Pedestal base (wider disc at floor)
-  const baseGeo = new THREE.CylinderGeometry(0.15, 0.16, 0.04, 8);
-  const base = new THREE.Mesh(baseGeo, ceramicMat);
-  base.position.set(x, y + 0.02, z);
+  // Pedestal base
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.16, 0.04, 8), ceramicMat);
+  base.position.set(x, fy + 0.02, z);
   group.add(base);
 
-  // Faucet (chrome: vertical pipe + spout)
-  const pipGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.2, 6);
-  const pip = new THREE.Mesh(pipGeo, chromeMat);
-  pip.position.set(x, y + 1.0, z - 0.18);
+  // Faucet
+  const pip = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.2, 6), chromeMat);
+  pip.position.set(x, fy + 1.0, z - 0.18);
   group.add(pip);
-  // Spout (bent forward)
-  const spoutGeo = new THREE.CylinderGeometry(0.012, 0.015, 0.12, 6);
-  const spout = new THREE.Mesh(spoutGeo, chromeMat);
-  spout.position.set(x, y + 1.05, z - 0.12);
+  const spout = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.015, 0.12, 6), chromeMat);
+  spout.position.set(x, fy + 1.05, z - 0.12);
   spout.rotation.x = Math.PI / 3;
   group.add(spout);
-  // Handles (two small knobs)
-  const knobGeo = new THREE.SphereGeometry(0.02, 6, 6);
+  // Handles
   for (const side of [-1, 1]) {
-    const knob = new THREE.Mesh(knobGeo, chromeMat);
-    knob.position.set(x + side * 0.08, y + 0.95, z - 0.18);
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 6), chromeMat);
+    knob.position.set(x + side * 0.08, fy + 0.95, z - 0.18);
     group.add(knob);
   }
 
-  // Mirror (above sink)
-  const mirrorGeo = new THREE.PlaneGeometry(0.5, 0.7);
-  const mirror = new THREE.Mesh(mirrorGeo, mirrorMat);
-  mirror.position.set(x, y + 1.5, z - 0.32);
+  // Mirror
+  const mirror = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.7), mirrorMat);
+  mirror.position.set(x, fy + 1.5, z - 0.32);
   group.add(mirror);
 }
 
