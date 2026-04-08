@@ -225,21 +225,25 @@ function registerSpatial(obj) {
 // ---------------------------------------------------------------------------
 function makeBox(w, h, d, mat, x, y, z) {
   const geo = new THREE.BoxGeometry(w, h, d);
-  // Scale UVs proportional to world size — tileScale = 1 repeat per N meters
-  // For most textures (damask, marble, plaster) ~3m per repeat looks natural
+  // Scale UVs to whole-number repeats based on wall size
+  // Target: ~3m per repeat, but round to integer so patterns don't get cut at edges
   const uvAttr = geo.attributes.uv;
   if (uvAttr) {
-    const tileScale = 1 / 3; // 1 texture repeat per 3 meters (natural human scale)
+    const targetMetersPerRepeat = 3;
+    // Compute integer repeat count for each axis based on wall dimensions
+    const rW = Math.max(1, Math.round(w / targetMetersPerRepeat));
+    const rH = Math.max(1, Math.round(h / targetMetersPerRepeat));
+    const rD = Math.max(1, Math.round(d / targetMetersPerRepeat));
     for (let i = 0; i < uvAttr.count; i++) {
       // BoxGeometry faces: 6 faces, 4 verts each
       const faceIdx = Math.floor(i / 4);
       let su, sv;
-      if (faceIdx < 2) { su = w; sv = h; }      // +/- Z faces
-      else if (faceIdx < 4) { su = w; sv = d; }  // +/- Y faces
-      else { su = d; sv = h; }                     // +/- X faces
+      if (faceIdx < 2) { su = rW; sv = rH; }      // +/- Z faces (front/back, w × h)
+      else if (faceIdx < 4) { su = rW; sv = rD; }  // +/- Y faces (top/bottom, w × d)
+      else { su = rD; sv = rH; }                    // +/- X faces (left/right, d × h)
       uvAttr.setXY(i,
-        uvAttr.getX(i) * su * tileScale,
-        uvAttr.getY(i) * sv * tileScale
+        uvAttr.getX(i) * su,
+        uvAttr.getY(i) * sv
       );
     }
   }
@@ -1349,21 +1353,27 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
       }
 
       // Hallway wall with door opening (1.2m door)
+      // Door dimensions: opening = doorW2 + 0.1 clearance on each side
       const doorW2 = 1.2;
-      const wallSegW = (roomW - doorW2) / 2 - 0.8; // extra gap for player radius
-      if (wallSegW > 0.5) {
-        // Left segment
-        group.add(makeBox(wallSegW, H - 0.5, 0.15, wallRoomMat, rx - roomW / 2 + wallSegW / 2 + 0.2, y + (H - 0.5) / 2, hallEdge));
-        addCollider(ubx + rx - roomW / 2 + wallSegW / 2 + 0.2, ubz + hallEdge, wallSegW, 0.3, y + H, y);
+      const doorH2 = 2.2;
+      const openingW = doorW2 + 0.15; // wall opening matches door + small frame gap
+      const wallSegW = (roomW - openingW) / 2;
+      if (wallSegW > 0.3) {
+        // Left segment (full from room edge to opening)
+        group.add(makeBox(wallSegW, H - 0.5, 0.15, wallRoomMat, rx - roomW / 2 + wallSegW / 2, y + (H - 0.5) / 2, hallEdge));
+        addCollider(ubx + rx - roomW / 2 + wallSegW / 2, ubz + hallEdge, wallSegW, 0.3, y + H, y);
         // Right segment
-        group.add(makeBox(wallSegW, H - 0.5, 0.15, wallRoomMat, rx + roomW / 2 - wallSegW / 2 - 0.2, y + (H - 0.5) / 2, hallEdge));
-        addCollider(ubx + rx + roomW / 2 - wallSegW / 2 - 0.2, ubz + hallEdge, wallSegW, 0.3, y + H, y);
+        group.add(makeBox(wallSegW, H - 0.5, 0.15, wallRoomMat, rx + roomW / 2 - wallSegW / 2, y + (H - 0.5) / 2, hallEdge));
+        addCollider(ubx + rx + roomW / 2 - wallSegW / 2, ubz + hallEdge, wallSegW, 0.3, y + H, y);
       }
-      // Door frame
-      group.add(makeBox(0.08, 2.2, 0.2, doorFrameMat, rx - doorW2 / 2, y + 1.1, hallEdge));
-      group.add(makeBox(0.08, 2.2, 0.2, doorFrameMat, rx + doorW2 / 2, y + 1.1, hallEdge));
-      // Auto-door
-      addAutoDoor(group, rx, y, hallEdge, doorW2, 2.2, 'x', doorW2 + 0.3,
+      // Wall above door (lintel)
+      const lintelH = H - 0.5 - doorH2;
+      if (lintelH > 0.1) {
+        group.add(makeBox(openingW, lintelH, 0.15, wallRoomMat, rx, y + doorH2 + lintelH / 2, hallEdge));
+        addCollider(ubx + rx, ubz + hallEdge, openingW, 0.3, y + H, y + doorH2);
+      }
+      // Auto-door (snugly fits the opening)
+      addAutoDoor(group, rx, y, hallEdge, doorW2, doorH2, 'x', doorW2 + 0.3,
         _currentBuildingX, _currentBuildingZ, { thinAxis: 'z' });
 
       // Room floor

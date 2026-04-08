@@ -447,12 +447,23 @@ export function generateDamaskWallpaper(size = 512) {
     ctx.restore();
   }
 
-  // Tile motifs in a tighter grid (more pattern density)
-  const tileSize = size / 2.5;
-  for (let row = -1; row < 5; row++) {
-    for (let col = -1; col < 5; col++) {
+  // Tile motifs with WRAP-AROUND for seamless tiling
+  // Each motif is drawn 9 times (3x3 wrapped copies) so the texture loops perfectly
+  const tileSize = size / 2;
+  // Base motif positions (within texture)
+  const positions = [];
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 2; col++) {
       const ox = (row % 2) * (tileSize / 2);
-      drawDamaskMotif(col * tileSize + ox, row * tileSize, tileSize);
+      positions.push([col * tileSize + ox + tileSize / 2, row * tileSize + tileSize / 2]);
+    }
+  }
+  // Draw each motif 9 times with wraparound offsets (-size, 0, +size)
+  for (const [px, py] of positions) {
+    for (const dx of [-size, 0, size]) {
+      for (const dy of [-size, 0, size]) {
+        drawDamaskMotif(px + dx, py + dy, tileSize);
+      }
     }
   }
 
