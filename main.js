@@ -640,17 +640,85 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
 // AUTO-DOOR SYSTEM – doors slide open when player approaches
 // =============================================================================
 function addAutoDoor(group, x, y, z, w, h, slideAxis, slideAmount, buildingX, buildingZ, opts = {}) {
-  const mat = opts.material || getCachedMat('auto_door', () => new THREE.MeshStandardMaterial({
-    map: textures.woodWalnut, roughness: 0.4, color: 0x6a5040,
+  const isGlass = opts.material && opts.material === getGlassMat();
+  const woodMat = opts.material || getCachedMat('auto_door_wood', () => new THREE.MeshStandardMaterial({
+    map: textures.woodWalnut, roughness: 0.35, color: 0x5a4030, metalness: 0.05,
   }));
-  // thinAxis: which axis is thin (perpendicular to wall). Default = opposite of slideAxis
+  const frameMat = getCachedMat('door_frame_dark', () => new THREE.MeshStandardMaterial({
+    map: textures.woodWalnut, roughness: 0.4, color: 0x3a2818, metalness: 0.1,
+  }));
+  const handleMat = getCachedMat('door_handle', () => new THREE.MeshStandardMaterial({
+    color: 0xddccaa, metalness: 0.85, roughness: 0.15,
+  }));
+  const glassMat = opts.glass || getGlassMat();
+
+  // thinAxis: perpendicular to the wall (default = opposite of slideAxis)
   const thinAxis = opts.thinAxis || (slideAxis === 'x' ? 'z' : 'x');
-  const door = makeBox(
-    thinAxis === 'x' ? 0.08 : w,
-    h,
-    thinAxis === 'z' ? 0.08 : w,
-    mat, x, y + h / 2, z
-  );
+
+  // Door PANEL is a Group containing: outer frame, inner panel, glass insert, handle
+  const door = new THREE.Group();
+  const thickness = 0.12;  // proper door thickness (was 0.08)
+
+  // Helper: create a door slab with correct axis layout
+  // wide = the door's width direction (along wall)
+  // wide is X if thinAxis='z', else Z
+  function slab(matIn, dx, dy, dz, dw, dh, dt) {
+    const sx = thinAxis === 'x' ? dt : dw;
+    const sy = dh;
+    const sz = thinAxis === 'z' ? dt : dw;
+    const ox = thinAxis === 'x' ? 0 : dx;
+    const oz = thinAxis === 'z' ? 0 : dx;
+    return makeBox(sx, sy, sz, matIn, ox, dy, oz);
+  }
+
+  // 1. Outer frame ring (top + bottom + 2 sides) — thicker dark wood
+  const frameW = 0.08; // frame thickness on the wall surface
+  // Top
+  door.add(slab(frameMat, 0, h - frameW / 2, 0, w, frameW, thickness + 0.02));
+  // Bottom
+  door.add(slab(frameMat, 0, frameW / 2, 0, w, frameW, thickness + 0.02));
+  // Left + Right side rails
+  door.add(slab(frameMat, -w / 2 + frameW / 2, h / 2, 0, frameW, h, thickness + 0.02));
+  door.add(slab(frameMat, w / 2 - frameW / 2, h / 2, 0, frameW, h, thickness + 0.02));
+
+  // 2. Main panel (the door body itself) — slightly inset
+  const panelW = w - frameW * 2;
+  const panelH = h - frameW * 2;
+  door.add(slab(woodMat, 0, h / 2, 0, panelW, panelH, thickness));
+
+  // 3. Glass insert (upper third) — only if not already a glass door
+  if (!isGlass) {
+    const glassW = panelW * 0.7;
+    const glassH = panelH * 0.35;
+    const glassY = h * 0.7;
+    // Glass slightly proud of panel surface so it's visible
+    door.add(slab(glassMat, 0, glassY, 0, glassW, glassH, thickness * 0.4));
+    // Cross-bar dividing glass (decorative)
+    door.add(slab(frameMat, 0, glassY, 0, glassW, 0.04, thickness + 0.03));
+  }
+
+  // 4. Handle — small chrome cylinder protruding from the panel
+  // Positioned ~1m up, opposite to slide direction (so it's on the "inner" edge)
+  const handleY = 1.0;
+  const handleOffset = w * 0.35; // 35% from center toward edge
+  const handleSign = slideAmount > 0 ? -1 : 1; // handle on opposite side from slide
+  if (thinAxis === 'z') {
+    // Wall runs along X, door's wide direction is X
+    const hx = handleSign * handleOffset;
+    door.add(makeBox(0.06, 0.04, thickness + 0.08, handleMat, hx, handleY, 0));
+    // Knob ball
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), handleMat);
+    knob.position.set(hx, handleY, thickness / 2 + 0.05);
+    door.add(knob);
+  } else {
+    const hz = handleSign * handleOffset;
+    door.add(makeBox(thickness + 0.08, 0.04, 0.06, handleMat, 0, handleY, hz));
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), handleMat);
+    knob.position.set(thickness / 2 + 0.05, handleY, hz);
+    door.add(knob);
+  }
+
+  door.position.set(x, y, z);
   group.add(door);
 
   // Optional collider that moves with the door
@@ -943,10 +1011,11 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   const floorBox = makeBox(W - 1, 0.3, D - 1, marbleMat, 0, 0.15, 0);
   floorBox.receiveShadow = true;
   group.add(floorBox);
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W - 1, D - 1), ceilMat);
-  ceil.rotation.x = Math.PI / 2;
-  ceil.position.set(0, H - 0.15, 0);
-  group.add(ceil);
+  // Decorative ceiling (textured box, faces down — UVs auto-scale via makeBox)
+  const ceilDecorMat = getCachedMat('ceil_decor', () => new THREE.MeshStandardMaterial({
+    map: textures.damask, color: 0xfaf2dc, roughness: 0.85,
+  }));
+  group.add(makeBox(W - 1, 0.08, D - 1, ceilDecorMat, 0, H - 0.18, 0));
 
   // Helper: add wall + collider in one call (LOCAL coords → world via bx/bz)
   function wall(wx, wz, ww, wd, mat, label) {
@@ -1221,11 +1290,11 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
   const slabW = W - 6; // leave openings for stairwell and lift
   group.add(makeBox(slabW, 0.3, D - 2, laminateMat, 0, y, 0));
 
-  // === CEILING ===
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W - 2, D - 2), ceilMat);
-  ceil.rotation.x = Math.PI / 2;
-  ceil.position.set(0, y + H - 0.15, 0);
-  group.add(ceil);
+  // === CEILING (textured box) ===
+  const ceilDecorMat = getCachedMat('ceil_decor', () => new THREE.MeshStandardMaterial({
+    map: textures.damask, color: 0xfaf2dc, roughness: 0.85,
+  }));
+  group.add(makeBox(W - 2, 0.08, D - 2, ceilDecorMat, 0, y + H - 0.18, 0));
 
   // === HALLWAY (runs full building width, connects lift to staircase) ===
   const hallNorth = hallZ - hallD2 / 2;  // = -1.5
