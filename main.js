@@ -225,22 +225,21 @@ function registerSpatial(obj) {
 // ---------------------------------------------------------------------------
 function makeBox(w, h, d, mat, x, y, z) {
   const geo = new THREE.BoxGeometry(w, h, d);
-  // Scale UVs to whole-number repeats based on wall size
-  // Target: ~3m per repeat, but round to integer so patterns don't get cut at edges
+  // Scale UVs proportional to world-space size — texture repeats at constant
+  // physical size everywhere. Since damask is seamlessly tileable, fractional
+  // repeats at wall ends are invisible (no cut seams).
   const uvAttr = geo.attributes.uv;
   if (uvAttr) {
-    const targetMetersPerRepeat = 3;
-    // Compute integer repeat count for each axis based on wall dimensions
-    const rW = Math.max(1, Math.round(w / targetMetersPerRepeat));
-    const rH = Math.max(1, Math.round(h / targetMetersPerRepeat));
-    const rD = Math.max(1, Math.round(d / targetMetersPerRepeat));
+    const metersPerRepeat = 3; // 1 texture repeat per 3 meters of wall
+    const sW = w / metersPerRepeat;
+    const sH = h / metersPerRepeat;
+    const sD = d / metersPerRepeat;
     for (let i = 0; i < uvAttr.count; i++) {
-      // BoxGeometry faces: 6 faces, 4 verts each
-      const faceIdx = Math.floor(i / 4);
+      const faceIdx = Math.floor(i / 4); // 6 faces, 4 verts each
       let su, sv;
-      if (faceIdx < 2) { su = rW; sv = rH; }      // +/- Z faces (front/back, w × h)
-      else if (faceIdx < 4) { su = rW; sv = rD; }  // +/- Y faces (top/bottom, w × d)
-      else { su = rD; sv = rH; }                    // +/- X faces (left/right, d × h)
+      if (faceIdx < 2) { su = sW; sv = sH; }      // +/- Z faces (front/back)
+      else if (faceIdx < 4) { su = sW; sv = sD; }  // +/- Y faces (top/bottom)
+      else { su = sD; sv = sH; }                    // +/- X faces (left/right)
       uvAttr.setXY(i,
         uvAttr.getX(i) * su,
         uvAttr.getY(i) * sv
