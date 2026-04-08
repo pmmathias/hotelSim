@@ -228,7 +228,7 @@ function makeBox(w, h, d, mat, x, y, z) {
   // This prevents textures from being stretched on large surfaces
   const uvAttr = geo.attributes.uv;
   if (uvAttr) {
-    const tileScale = 1.0; // 1 repeat per 1 meter (denser tiling, less stretching)
+    const tileScale = 2.0; // 2 repeats per meter (very dense tiling)
     for (let i = 0; i < uvAttr.count; i++) {
       // BoxGeometry faces: determine which axis this face uses
       // by checking the normal (position in the buffer)
@@ -998,7 +998,7 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   }));
   group.add(makePlane(wcW - 1, wcD - 1, tileMat, wcX, 0.35, wcZ));
   // Stall partitions + toilets
-  const stallWallMat = getCachedMat('stall_wall', () => new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.6 }));
+  const stallWallMat = getCachedMat('stall_wall', () => new THREE.MeshStandardMaterial({ map: textures.concrete, color: 0xcccccc, roughness: 0.6 }));
   for (let si = 0; si < 3; si++) {
     const sz = wcZ - wcD / 2 + 1.5 + si * 1.8;
     if (si > 0) group.add(makeBox(1.8, 1.8, 0.08, stallWallMat, wcX - 1.5, 1.1, sz - 0.9));
@@ -1019,7 +1019,7 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   const liftW = 3.5, liftD = 3.5;
   const liftTotalH = H * 3;
   const liftMetalMat = getCachedMat('lift_metal', () => new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.6, roughness: 0.2 }));
-  const liftWallMat = getCachedMat('lift_wall', () => new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.4, metalness: 0.2 }));
+  const liftWallMat = getCachedMat('lift_wall', () => new THREE.MeshStandardMaterial({ map: textures.marble, color: 0xcccccc, roughness: 0.4, metalness: 0.2 }));
   group.add(makeBox(0.15, liftTotalH, liftD, liftWallMat, liftX - liftW / 2, liftTotalH / 2, liftZ));
   group.add(makeBox(liftW, liftTotalH, 0.15, liftWallMat, liftX, liftTotalH / 2, liftZ - liftD / 2));
   group.add(makeBox(liftW, liftTotalH, 0.15, liftWallMat, liftX, liftTotalH / 2, liftZ + liftD / 2));
