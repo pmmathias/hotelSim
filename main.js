@@ -3698,15 +3698,19 @@ function animate() {
   }
 
   // Visible-driven floor culling: render interiors when they COULD be seen
-  if (frameCount % 5 === 0) {
+  // Run every 2 frames for responsiveness when crossing building/floor boundaries
+  if (frameCount % 2 === 0) {
     const py = camera.position.y;
     const px = camera.position.x;
     const pz = camera.position.z;
+    const playerFloor = Math.max(0, Math.round((py - PLAYER_HEIGHT) / 6));
+
     for (const fg of floorGroups) {
       const dx = Math.abs(px - fg.buildingX);
       const dz = Math.abs(pz - fg.buildingZ);
+      // Aggressive thresholds: only render interiors of buildings the player is actually in/near
       const inBuilding = dx < 60 && dz < 20;
-      const nearBuilding = dx < 80 && dz < 40; // close enough to see through windows/glass
+      const nearBuilding = dx < 70 && dz < 30;
 
       if (!nearBuilding) {
         fg.group.visible = false;
@@ -3714,15 +3718,11 @@ function animate() {
       }
 
       if (inBuilding) {
-        // Inside: show current floor + adjacent
-        const playerFloor = Math.max(0, Math.round((py - PLAYER_HEIGHT) / 6));
-        const floorDist = Math.abs(fg.floorNum - playerFloor);
-        fg.group.visible = floorDist <= 1;
+        // Inside: ONLY current floor (not adjacent — adjacent floors are hidden by ceilings)
+        fg.group.visible = fg.floorNum === playerFloor;
       } else {
-        // Outside but near: show EG (visible through glass doors/windows)
-        // Upper floors only visible if player Y is near that floor (balcony level)
-        const playerFloor = Math.max(0, Math.round((py - PLAYER_HEIGHT) / 6));
-        fg.group.visible = fg.floorNum === 0 || Math.abs(fg.floorNum - playerFloor) <= 1;
+        // Outside but near: only EG visible through entrance glass
+        fg.group.visible = fg.floorNum === 0;
       }
     }
   }
