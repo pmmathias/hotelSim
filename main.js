@@ -485,8 +485,8 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
     hiGroup.add(makeBox(0.1, doorH, 0.1, doorFrameMat2, entranceW / 2, doorH / 2, dz));
   }
 
-  // Floor slabs (no shadow cast – internal)
-  const slabMat = makePBR('slab', { color: 0xdddddd, roughness: 0.8 });
+  // Floor slabs (textured: bottom = ornate ceiling for floor below, top = parquet)
+  const slabMat = makePBR('slab', { map: textures.damask, color: 0xfaf2dc, roughness: 0.8 });
   for (let f = 1; f < floors; f++) {
     const slab = makeBox(width - wallT * 2, 0.25, depth - wallT * 2, slabMat, 0, f * floorH, 0);
     slab.receiveShadow = true;
@@ -1016,6 +1016,22 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
     map: textures.damask, color: 0xfaf2dc, roughness: 0.85,
   }));
   group.add(makeBox(W - 1, 0.08, D - 1, ceilDecorMat, 0, H - 0.18, 0));
+
+  // === DAMASK WALLPAPER PANELS (cover interior face of exterior walls) ===
+  const wallpaperMat = getCachedMat('wallpaper_eg', () => new THREE.MeshStandardMaterial({
+    map: textures.damask, color: 0xf8efd6, roughness: 0.78,
+  }));
+  // West wall (interior side)
+  group.add(makeBox(0.06, H - 0.4, D - 1, wallpaperMat, -W / 2 + 0.4, (H - 0.4) / 2 + 0.2, 0));
+  // East wall (interior side)
+  group.add(makeBox(0.06, H - 0.4, D - 1, wallpaperMat, W / 2 - 0.4, (H - 0.4) / 2 + 0.2, 0));
+  // North wall (left + right of entrance gap)
+  const npW = (W - 14) / 2;
+  group.add(makeBox(npW, H - 0.4, 0.06, wallpaperMat, -(npW / 2 + 7), (H - 0.4) / 2 + 0.2, -D / 2 + 0.4));
+  group.add(makeBox(npW, H - 0.4, 0.06, wallpaperMat, (npW / 2 + 7), (H - 0.4) / 2 + 0.2, -D / 2 + 0.4));
+  // South wall (left + right of entrance gap)
+  group.add(makeBox(npW, H - 0.4, 0.06, wallpaperMat, -(npW / 2 + 7), (H - 0.4) / 2 + 0.2, D / 2 - 0.4));
+  group.add(makeBox(npW, H - 0.4, 0.06, wallpaperMat, (npW / 2 + 7), (H - 0.4) / 2 + 0.2, D / 2 - 0.4));
 
   // Helper: add wall + collider in one call (LOCAL coords → world via bx/bz)
   function wall(wx, wz, ww, wd, mat, label) {
