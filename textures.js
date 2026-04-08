@@ -105,6 +105,33 @@ export const TEXTURE_URLS = {
     source: 'Poly Haven - Herringbone Parquet',
     license: 'CC0',
   },
+
+  // ===== CITY SHOP FACADES (5 variants for variety) =====
+  facadeBrickRed: {
+    diffuse: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/brick_wall_001/brick_wall_001_diff_1k.jpg',
+    source: 'Poly Haven - Brick Wall 001 (red rough)',
+    license: 'CC0',
+  },
+  facadeBrickTan: {
+    diffuse: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/brick_wall_003/brick_wall_003_diff_1k.jpg',
+    source: 'Poly Haven - Brick Wall 003 (tan)',
+    license: 'CC0',
+  },
+  facadePlasterStone: {
+    diffuse: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/plastered_stone_wall/plastered_stone_wall_diff_1k.jpg',
+    source: 'Poly Haven - Plastered Stone Wall',
+    license: 'CC0',
+  },
+  facadeStone: {
+    diffuse: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/stone_wall/stone_wall_diff_1k.jpg',
+    source: 'Poly Haven - Stone Wall',
+    license: 'CC0',
+  },
+  facadePlaster: {
+    diffuse: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/plaster_stone_wall_01/plaster_stone_wall_01_diff_1k.jpg',
+    source: 'Poly Haven - Plaster Stone Wall 01',
+    license: 'CC0',
+  },
 };
 
 
@@ -1477,10 +1504,16 @@ export function generateAllTextures() {
     sand, grass, concrete, wall, roof, water, bark, sky,
     lobbyFloor, damask, marble, woodWalnut, woodOak,
     // Luxury textures (loaded async, fall back to procedural)
-    marbleFloor: lobbyFloor, // start with procedural
+    marbleFloor: lobbyFloor,
     marbleWall: marble,
     parquet: woodOak,
     herringbone: lobbyFloor,
+    // City shop facades (start with the procedural wall texture)
+    facadeBrickRed:     wall,
+    facadeBrickTan:     wall,
+    facadePlasterStone: wall,
+    facadeStone:        wall,
+    facadePlaster:      wall,
   };
 }
 
@@ -1500,6 +1533,12 @@ export async function upgradeLuxuryTextures(textures, onUpgrade) {
     { key: 'marbleWall',  url: TEXTURE_URLS.marbleWall.diffuse,  repeat: [2, 2] },
     { key: 'parquet',     url: TEXTURE_URLS.parquet.diffuse,     repeat: [4, 4] },
     { key: 'herringbone', url: TEXTURE_URLS.herringbone.diffuse, repeat: [3, 3] },
+    // City shop facades
+    { key: 'facadeBrickRed',     url: TEXTURE_URLS.facadeBrickRed.diffuse,     repeat: [2, 2] },
+    { key: 'facadeBrickTan',     url: TEXTURE_URLS.facadeBrickTan.diffuse,     repeat: [2, 2] },
+    { key: 'facadePlasterStone', url: TEXTURE_URLS.facadePlasterStone.diffuse, repeat: [2, 2] },
+    { key: 'facadeStone',        url: TEXTURE_URLS.facadeStone.diffuse,        repeat: [2, 2] },
+    { key: 'facadePlaster',      url: TEXTURE_URLS.facadePlaster.diffuse,      repeat: [2, 2] },
   ];
 
   for (const { key, url, repeat } of luxuryTextures) {

@@ -1435,15 +1435,14 @@ function createCity(scene) {
     color: 0x444444, metalness: 0.3, roughness: 0.5,
   }));
 
-  // Facade textures (5 variations using existing wall + damask textures)
-  const facadeMats = [];
-  const facadeColors = [0xf2e8d5, 0xe5dcc8, 0xddd0b8, 0xf0e0c0, 0xe8d5bf];
-  for (let i = 0; i < 5; i++) {
-    facadeMats.push(getCachedMat('facade_' + i, () => new THREE.MeshStandardMaterial({
-      map: i % 2 === 0 ? textures.wall : textures.damask,
-      color: facadeColors[i], roughness: 0.82,
-    })));
-  }
+  // Facade textures (5 distinct variations using brick/stone/plaster textures)
+  const facadeTexKeys = ['facadeBrickRed', 'facadeBrickTan', 'facadePlasterStone', 'facadeStone', 'facadePlaster'];
+  const facadeColors = [0xf5e8d8, 0xe8dccc, 0xddd0b8, 0xf0e0c0, 0xe8d5bf]; // subtle tints
+  const facadeMats = facadeTexKeys.map((key, i) =>
+    getCachedMat('facade_' + i, () => new THREE.MeshStandardMaterial({
+      map: textures[key], color: facadeColors[i], roughness: 0.85,
+    }))
+  );
 
   // Sockel (dark base) material
   const sockelMat = getCachedMat('sockel', () => new THREE.MeshStandardMaterial({
@@ -3340,10 +3339,16 @@ function init() {
   upgradeLuxuryTextures(textures, (key, newTex) => {
     // Map texture keys → cached material names
     const matKey = {
-      marbleFloor: 'marble',     // lobby marble floor
-      marbleWall: 'lift_wall',   // lift cabin walls
-      parquet: 'laminate',       // upper floor room parquet
-      herringbone: 'stair_marble', // staircase steps
+      marbleFloor: 'marble',
+      marbleWall: 'lift_wall',
+      parquet: 'laminate',
+      herringbone: 'stair_marble',
+      // City shop facades (5 cached materials, indexed by key order)
+      facadeBrickRed: 'facade_0',
+      facadeBrickTan: 'facade_1',
+      facadePlasterStone: 'facade_2',
+      facadeStone: 'facade_3',
+      facadePlaster: 'facade_4',
     }[key];
     if (matKey && matCache[matKey]) {
       matCache[matKey].map = newTex;
