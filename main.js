@@ -17,6 +17,7 @@ import {
   generateAllTextures,
   applySkyGradient,
   generateNormalMap,
+  upgradeLuxuryTextures,
 } from './textures.js';
 
 // ---------------------------------------------------------------------------
@@ -288,7 +289,7 @@ function getGlassMat() {
 
 function getMarbleMat() {
   return getCachedMat('marble', () => new THREE.MeshStandardMaterial({
-    map: textures.marble, roughness: 0.15, metalness: 0.05,
+    map: textures.marbleFloor, roughness: 0.15, metalness: 0.05,
     envMap, envMapIntensity: 0.4,
   }));
 }
@@ -1019,7 +1020,7 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   const liftW = 3.5, liftD = 3.5;
   const liftTotalH = H * 3;
   const liftMetalMat = getCachedMat('lift_metal', () => new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.6, roughness: 0.2 }));
-  const liftWallMat = getCachedMat('lift_wall', () => new THREE.MeshStandardMaterial({ map: textures.marble, color: 0xcccccc, roughness: 0.4, metalness: 0.2 }));
+  const liftWallMat = getCachedMat('lift_wall', () => new THREE.MeshStandardMaterial({ map: textures.marbleWall, color: 0xeeeae0, roughness: 0.3, metalness: 0.15 }));
   group.add(makeBox(0.15, liftTotalH, liftD, liftWallMat, liftX - liftW / 2, liftTotalH / 2, liftZ));
   group.add(makeBox(liftW, liftTotalH, 0.15, liftWallMat, liftX, liftTotalH / 2, liftZ - liftD / 2));
   group.add(makeBox(liftW, liftTotalH, 0.15, liftWallMat, liftX, liftTotalH / 2, liftZ + liftD / 2));
@@ -1193,7 +1194,7 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
 
   // Materials
   const laminateMat = getCachedMat('laminate', () => new THREE.MeshStandardMaterial({
-    color: 0xc8a882, roughness: 0.45,
+    map: textures.parquet, color: 0xeae0d0, roughness: 0.45,
     polygonOffset: true, polygonOffsetFactor: -12, polygonOffsetUnits: -12,
   }));
   const wallRoomMat = getCachedMat('wall_room', () => new THREE.MeshStandardMaterial({
@@ -3264,6 +3265,22 @@ function init() {
   loadBar.style.width = '30%';
   buildScene(scene);
   loadBar.style.width = '60%';
+
+  // Async: upgrade interior textures to high-res Poly Haven CC0 versions
+  // (procedural fallback already in place — this just swaps to better maps)
+  upgradeLuxuryTextures(textures, (key, newTex) => {
+    // Map texture keys → cached material names
+    const matKey = {
+      marbleFloor: 'marble',     // lobby marble floor
+      marbleWall: 'lift_wall',   // lift cabin walls
+      parquet: 'laminate',       // upper floor room parquet
+      herringbone: 'stair_marble', // staircase steps
+    }[key];
+    if (matKey && matCache[matKey]) {
+      matCache[matKey].map = newTex;
+      matCache[matKey].needsUpdate = true;
+    }
+  });
 
   generateEnvMap(renderer, scene);
   buildHeightmapCache(); // O(1) terrain lookups from now on

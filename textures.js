@@ -77,6 +77,34 @@ export const TEXTURE_URLS = {
     source: 'Poly Haven - Kloofendal 43d Clear (Pure Sky)',
     license: 'CC0',
   },
+
+  // 9. LUXURY MARBLE FLOOR (checkerboard pattern for lobby)
+  marbleFloor: {
+    diffuse: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/floor_tiles_06/floor_tiles_06_diff_1k.jpg',
+    source: 'Poly Haven - Floor Tiles 06 (checkered marble)',
+    license: 'CC0',
+  },
+
+  // 10. CREAM MARBLE WALL (smooth, palatial)
+  marbleWall: {
+    diffuse: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/marble_01/marble_01_diff_1k.jpg',
+    source: 'Poly Haven - Marble 01 (cream with veining)',
+    license: 'CC0',
+  },
+
+  // 11. OAK PARQUET (warm hardwood for hotel rooms)
+  parquet: {
+    diffuse: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/wood_floor/wood_floor_diff_1k.jpg',
+    source: 'Poly Haven - Wood Floor (oak planks)',
+    license: 'CC0',
+  },
+
+  // 12. HERRINGBONE PARQUET (premium, for entrance areas)
+  herringbone: {
+    diffuse: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/herringbone_parquet/herringbone_parquet_diff_1k.jpg',
+    source: 'Poly Haven - Herringbone Parquet',
+    license: 'CC0',
+  },
 };
 
 
@@ -295,59 +323,105 @@ export function generateDamaskWallpaper(size = 512) {
   const { canvas, ctx } = createCanvas(size, size);
   const rand = seededRandom(700);
 
-  ctx.fillStyle = '#F5ECD7';
+  // Rich cream base with subtle warm gradient
+  const grad = ctx.createLinearGradient(0, 0, size, size);
+  grad.addColorStop(0, '#f8efd6');
+  grad.addColorStop(1, '#ede0bc');
+  ctx.fillStyle = grad;
   ctx.fillRect(0, 0, size, size);
 
   // Linen grain
   const imgData = ctx.getImageData(0, 0, size, size);
   for (let i = 0; i < imgData.data.length; i += 4) {
-    const n = (rand() - 0.5) * 10;
+    const n = (rand() - 0.5) * 12;
     imgData.data[i] = Math.min(255, Math.max(0, imgData.data[i] + n));
     imgData.data[i+1] = Math.min(255, Math.max(0, imgData.data[i+1] + n));
-    imgData.data[i+2] = Math.min(255, Math.max(0, imgData.data[i+2] + n - 2));
+    imgData.data[i+2] = Math.min(255, Math.max(0, imgData.data[i+2] + n - 3));
   }
   ctx.putImageData(imgData, 0, 0);
 
+  // Rich gold colors (more saturated, more visible)
+  const GOLD_BRIGHT = 'rgba(218, 165, 32, 0.55)';
+  const GOLD_MID    = 'rgba(184, 134, 11, 0.45)';
+  const GOLD_DARK   = 'rgba(120, 80, 20, 0.35)';
+  const SHADOW      = 'rgba(80, 50, 10, 0.15)';
+
   function drawDamaskMotif(cx, cy, s) {
     ctx.save(); ctx.translate(cx, cy);
-    // Central diamond
-    ctx.fillStyle = 'rgba(201, 168, 76, 0.18)';
+
+    // Drop shadow for 3D effect
+    ctx.fillStyle = SHADOW;
+    ctx.beginPath();
+    ctx.moveTo(2, -s*0.45 + 2);
+    ctx.quadraticCurveTo(s*0.45 + 2, -s*0.18 + 2, s*0.4 + 2, 2);
+    ctx.quadraticCurveTo(s*0.45 + 2, s*0.18 + 2, 2, s*0.45 + 2);
+    ctx.quadraticCurveTo(-s*0.45 + 2, s*0.18 + 2, -s*0.4 + 2, 2);
+    ctx.quadraticCurveTo(-s*0.45 + 2, -s*0.18 + 2, 2, -s*0.45 + 2);
+    ctx.closePath(); ctx.fill();
+
+    // Outer baroque cartouche (large diamond with curves)
+    ctx.fillStyle = GOLD_BRIGHT;
     ctx.beginPath();
     ctx.moveTo(0, -s*0.45);
-    ctx.quadraticCurveTo(s*0.35, -s*0.15, s*0.3, 0);
-    ctx.quadraticCurveTo(s*0.35, s*0.15, 0, s*0.45);
-    ctx.quadraticCurveTo(-s*0.35, s*0.15, -s*0.3, 0);
-    ctx.quadraticCurveTo(-s*0.35, -s*0.15, 0, -s*0.45);
+    ctx.quadraticCurveTo(s*0.45, -s*0.18, s*0.4, 0);
+    ctx.quadraticCurveTo(s*0.45, s*0.18, 0, s*0.45);
+    ctx.quadraticCurveTo(-s*0.45, s*0.18, -s*0.4, 0);
+    ctx.quadraticCurveTo(-s*0.45, -s*0.18, 0, -s*0.45);
     ctx.closePath(); ctx.fill();
-    // Inner diamond
-    ctx.fillStyle = 'rgba(160, 120, 48, 0.15)';
+
+    // Inner medallion
+    ctx.fillStyle = GOLD_MID;
     ctx.beginPath();
-    ctx.moveTo(0, -s*0.25);
-    ctx.quadraticCurveTo(s*0.18, -s*0.08, s*0.15, 0);
-    ctx.quadraticCurveTo(s*0.18, s*0.08, 0, s*0.25);
-    ctx.quadraticCurveTo(-s*0.18, s*0.08, -s*0.15, 0);
-    ctx.quadraticCurveTo(-s*0.18, -s*0.08, 0, -s*0.25);
+    ctx.moveTo(0, -s*0.3);
+    ctx.quadraticCurveTo(s*0.22, -s*0.1, s*0.2, 0);
+    ctx.quadraticCurveTo(s*0.22, s*0.1, 0, s*0.3);
+    ctx.quadraticCurveTo(-s*0.22, s*0.1, -s*0.2, 0);
+    ctx.quadraticCurveTo(-s*0.22, -s*0.1, 0, -s*0.3);
     ctx.closePath(); ctx.fill();
-    // Flourish scrolls
-    ctx.strokeStyle = 'rgba(201, 168, 76, 0.14)';
-    ctx.lineWidth = 1.5;
+
+    // Center fleur-de-lis style ornament
+    ctx.fillStyle = GOLD_DARK;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, s*0.08, s*0.14, 0, 0, Math.PI*2); ctx.fill();
+
+    // 4-way baroque flourishes
+    ctx.strokeStyle = GOLD_BRIGHT;
+    ctx.lineWidth = 2.5;
     for (let q = 0; q < 4; q++) {
       ctx.save(); ctx.rotate(q * Math.PI / 2);
+      // Curling scroll
       ctx.beginPath();
-      ctx.moveTo(s*0.15, -s*0.15);
-      ctx.bezierCurveTo(s*0.35, -s*0.3, s*0.45, -s*0.1, s*0.3, s*0.05);
+      ctx.moveTo(s*0.2, -s*0.2);
+      ctx.bezierCurveTo(s*0.42, -s*0.35, s*0.55, -s*0.1, s*0.38, s*0.05);
       ctx.stroke();
+      // Leaf accent
       ctx.beginPath();
-      ctx.ellipse(s*0.32, -s*0.18, s*0.06, s*0.03, Math.PI/4, 0, Math.PI*2);
-      ctx.fillStyle = 'rgba(201, 168, 76, 0.1)'; ctx.fill();
+      ctx.ellipse(s*0.42, -s*0.22, s*0.09, s*0.04, Math.PI/4, 0, Math.PI*2);
+      ctx.fillStyle = GOLD_MID; ctx.fill();
+      // Small dots
+      ctx.beginPath();
+      ctx.arc(s*0.5, -s*0.05, s*0.025, 0, Math.PI*2);
+      ctx.fillStyle = GOLD_BRIGHT; ctx.fill();
       ctx.restore();
     }
-    ctx.beginPath(); ctx.arc(0, 0, s*0.04, 0, Math.PI*2);
-    ctx.fillStyle = 'rgba(160, 120, 48, 0.2)'; ctx.fill();
+
+    // Connecting curls between motifs
+    ctx.strokeStyle = GOLD_DARK;
+    ctx.lineWidth = 1.8;
+    for (let q = 0; q < 4; q++) {
+      ctx.save(); ctx.rotate(q * Math.PI / 2 + Math.PI / 4);
+      ctx.beginPath();
+      ctx.moveTo(s*0.35, 0);
+      ctx.quadraticCurveTo(s*0.5, s*0.08, s*0.55, 0);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     ctx.restore();
   }
 
-  const tileSize = size / 3;
+  // Tile motifs in a tighter grid (more pattern density)
+  const tileSize = size / 2.5;
   for (let row = -1; row < 5; row++) {
     for (let col = -1; col < 5; col++) {
       const ox = (row % 2) * (tileSize / 2);
@@ -355,10 +429,10 @@ export function generateDamaskWallpaper(size = 512) {
     }
   }
 
-  // Subtle vertical stripes
-  for (let x = 0; x < size; x += 4) {
-    ctx.fillStyle = x % 8 < 4 ? 'rgba(232, 213, 176, 0.04)' : 'rgba(200, 190, 170, 0.03)';
-    ctx.fillRect(x, 0, 2, size);
+  // Vertical silk stripes overlay
+  for (let x = 0; x < size; x += 3) {
+    ctx.fillStyle = x % 6 < 3 ? 'rgba(255, 240, 200, 0.05)' : 'rgba(180, 160, 120, 0.04)';
+    ctx.fillRect(x, 0, 1.5, size);
   }
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -1399,5 +1473,48 @@ export function generateAllTextures() {
   woodOak.wrapS = THREE.RepeatWrapping;
   woodOak.wrapT = THREE.RepeatWrapping;
 
-  return { sand, grass, concrete, wall, roof, water, bark, sky, lobbyFloor, damask, marble, woodWalnut, woodOak };
+  return {
+    sand, grass, concrete, wall, roof, water, bark, sky,
+    lobbyFloor, damask, marble, woodWalnut, woodOak,
+    // Luxury textures (loaded async, fall back to procedural)
+    marbleFloor: lobbyFloor, // start with procedural
+    marbleWall: marble,
+    parquet: woodOak,
+    herringbone: lobbyFloor,
+  };
+}
+
+/**
+ * Async upgrade loader: fetches CC0 luxury textures from Poly Haven and
+ * upgrades the existing texture object IN PLACE. Materials referencing
+ * the original procedural maps must be tracked and updated by the caller.
+ *
+ * Calls onUpgrade(key, newTexture) for each successful load.
+ */
+export async function upgradeLuxuryTextures(textures, onUpgrade) {
+  const loader = new THREE.TextureLoader();
+  loader.crossOrigin = 'anonymous';
+
+  const luxuryTextures = [
+    { key: 'marbleFloor', url: TEXTURE_URLS.marbleFloor.diffuse, repeat: [3, 3] },
+    { key: 'marbleWall',  url: TEXTURE_URLS.marbleWall.diffuse,  repeat: [2, 2] },
+    { key: 'parquet',     url: TEXTURE_URLS.parquet.diffuse,     repeat: [4, 4] },
+    { key: 'herringbone', url: TEXTURE_URLS.herringbone.diffuse, repeat: [3, 3] },
+  ];
+
+  for (const { key, url, repeat } of luxuryTextures) {
+    try {
+      const tex = await new Promise((resolve, reject) => {
+        loader.load(url, resolve, undefined, reject);
+      });
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(repeat[0], repeat[1]);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      textures[key] = tex;
+      if (onUpgrade) onUpgrade(key, tex);
+    } catch (e) {
+      console.warn(`Luxury texture upgrade failed for ${key}, keeping procedural fallback:`, e);
+    }
+  }
 }
