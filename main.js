@@ -225,15 +225,14 @@ function registerSpatial(obj) {
 // ---------------------------------------------------------------------------
 function makeBox(w, h, d, mat, x, y, z) {
   const geo = new THREE.BoxGeometry(w, h, d);
-  // Scale UVs proportional to world size (1 repeat per 2m)
-  // This prevents textures from being stretched on large surfaces
+  // Scale UVs proportional to world size — tileScale = 1 repeat per N meters
+  // For most textures (damask, marble, plaster) ~3m per repeat looks natural
   const uvAttr = geo.attributes.uv;
   if (uvAttr) {
-    const tileScale = 2.0; // 2 repeats per meter (very dense tiling)
+    const tileScale = 1 / 3; // 1 texture repeat per 3 meters (natural human scale)
     for (let i = 0; i < uvAttr.count; i++) {
-      // BoxGeometry faces: determine which axis this face uses
-      // by checking the normal (position in the buffer)
-      const faceIdx = Math.floor(i / 4); // 6 faces, 4 verts each
+      // BoxGeometry faces: 6 faces, 4 verts each
+      const faceIdx = Math.floor(i / 4);
       let su, sv;
       if (faceIdx < 2) { su = w; sv = h; }      // +/- Z faces
       else if (faceIdx < 4) { su = w; sv = d; }  // +/- Y faces
@@ -485,8 +484,8 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
     hiGroup.add(makeBox(0.1, doorH, 0.1, doorFrameMat2, entranceW / 2, doorH / 2, dz));
   }
 
-  // Floor slabs (textured: bottom = ornate ceiling for floor below, top = parquet)
-  const slabMat = makePBR('slab', { map: textures.damask, color: 0xfaf2dc, roughness: 0.8 });
+  // Floor slabs (top = parquet, no texture needed since covered by floor-specific materials)
+  const slabMat = makePBR('slab', { color: 0x5a4030, roughness: 0.8 });
   for (let f = 1; f < floors; f++) {
     const slab = makeBox(width - wallT * 2, 0.25, depth - wallT * 2, slabMat, 0, f * floorH, 0);
     slab.receiveShadow = true;
@@ -1011,11 +1010,12 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   const floorBox = makeBox(W - 1, 0.3, D - 1, marbleMat, 0, 0.15, 0);
   floorBox.receiveShadow = true;
   group.add(floorBox);
-  // Decorative ceiling (textured box, faces down — UVs auto-scale via makeBox)
+  // Decorative ceiling — visible damask with warm tint
+  // (makeBox auto-scales UVs by surface area; for large rooms this gives proper tiling)
   const ceilDecorMat = getCachedMat('ceil_decor', () => new THREE.MeshStandardMaterial({
-    map: textures.damask, color: 0xfaf2dc, roughness: 0.85,
+    map: textures.damask, color: 0xe8c878, roughness: 0.7, metalness: 0.1,
   }));
-  group.add(makeBox(W - 1, 0.08, D - 1, ceilDecorMat, 0, H - 0.18, 0));
+  group.add(makeBox(W - 1, 0.08, D - 1, ceilDecorMat, 0, H - 0.5, 0));
 
   // === DAMASK WALLPAPER PANELS (cover interior face of exterior walls) ===
   const wallpaperMat = getCachedMat('wallpaper_eg', () => new THREE.MeshStandardMaterial({
@@ -1306,11 +1306,11 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
   const slabW = W - 6; // leave openings for stairwell and lift
   group.add(makeBox(slabW, 0.3, D - 2, laminateMat, 0, y, 0));
 
-  // === CEILING (textured box) ===
+  // === CEILING (textured box, ornate tinted damask) ===
   const ceilDecorMat = getCachedMat('ceil_decor', () => new THREE.MeshStandardMaterial({
-    map: textures.damask, color: 0xfaf2dc, roughness: 0.85,
+    map: textures.damask, color: 0xe8c878, roughness: 0.7, metalness: 0.1,
   }));
-  group.add(makeBox(W - 2, 0.08, D - 2, ceilDecorMat, 0, y + H - 0.18, 0));
+  group.add(makeBox(W - 2, 0.08, D - 2, ceilDecorMat, 0, y + H - 0.5, 0));
 
   // === HALLWAY (runs full building width, connects lift to staircase) ===
   const hallNorth = hallZ - hallD2 / 2;  // = -1.5
