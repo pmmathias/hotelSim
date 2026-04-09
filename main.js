@@ -524,29 +524,29 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
   for (let f = 0; f < floors; f++) {
     for (let c = 0; c < cols; c++) {
       const bx = startX + c * (balconyW + 0.5);
-      // No balconies on ground floor (they appear inside the building at mid-height)
-      if (f === 0) continue;
+      const by = (f + 0.5) * floorH;
 
-      const byVis = f * floorH + 0.15; // balcony slab at floor level (not window midpoint)
-      const byFloor = f * floorH;       // walkable floor level
-
+      // Skip balconies in the entrance zone (ground floor, center of building)
       const inEntranceX = Math.abs(bx) < (entranceW / 2 + balconyW / 2);
+      const isGroundFloor = f === 0;
 
       for (const faceSign of [1, -1]) { // +1=south, -1=north
-        // Skip balconies in entrance zone (upper floors still solid wall above entrance)
-        if (inEntranceX) continue;
+        // Skip ground-floor balconies over entrance openings
+        if (isGroundFloor && inEntranceX) continue;
 
         const fz_bal = faceSign * (depth / 2 + balconyD / 2);
         const fz_rail = faceSign * (depth / 2 + balconyD);
         const fz_win = faceSign * (depth / 2 + 0.05);
 
-        hiGroup.add(makeBox(balconyW, 0.15, balconyD, balconyMat, bx, byVis, fz_bal));
-        hiGroup.add(makeBox(balconyW, 1, 0.05, glassMat, bx, byVis + 0.5, fz_rail));
-        // Make balcony walkable at ROOM floor level (not visual midpoint)
-        addFloor(x + bx, z + faceSign * (depth / 2 + balconyD / 2), balconyW, balconyD, byFloor);
-        addCollider(x + bx, z + faceSign * (depth / 2 + balconyD), balconyW, 0.1, byFloor + 1.2, byFloor - 0.5);
+        hiGroup.add(makeBox(balconyW, 0.15, balconyD, balconyMat, bx, by, fz_bal));
+        hiGroup.add(makeBox(balconyW, 1, 0.05, glassMat, bx, by + 0.5, fz_rail));
+        // Walkable floor at ACTUAL floor level (not visual midpoint — otherwise unreachable)
+        // Collider has minY so ground-level players aren't blocked by upper floor railings
+        const walkY = f * floorH;
+        addFloor(x + bx, z + faceSign * (depth / 2 + balconyD / 2), balconyW, balconyD, walkY);
+        addCollider(x + bx, z + faceSign * (depth / 2 + balconyD), balconyW, 0.1, walkY + 1.2, walkY - 0.5);
         if (faceSign > 0) { // windows only on south
-          hiGroup.add(makeBox(balconyW - 0.6, floorH * 0.6, 0.08, glassMat, bx, byVis, fz_win));
+          hiGroup.add(makeBox(balconyW - 0.6, floorH * 0.6, 0.08, glassMat, bx, by, fz_win));
         }
 
         // DFW LED frames + orange panels (skip entrance zone on ground floor)
@@ -557,16 +557,16 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
           const ledT = 0.1;
           const fz = faceSign * (depth / 2 + 0.35);
 
-          const mt = makeBox(balconyW + 0.2, ledT, ledT, ledMat, bx, byVis + floorH * 0.35, fz);
-          const mb = makeBox(balconyW + 0.2, ledT, ledT, ledMat, bx, byVis - floorH * 0.35, fz);
-          const ml = makeBox(ledT, floorH * 0.7 + 0.2, ledT, ledMat, bx - balconyW / 2 - 0.1, byVis, fz);
-          const mr = makeBox(ledT, floorH * 0.7 + 0.2, ledT, ledMat, bx + balconyW / 2 + 0.1, byVis, fz);
+          const mt = makeBox(balconyW + 0.2, ledT, ledT, ledMat, bx, by + floorH * 0.35, fz);
+          const mb = makeBox(balconyW + 0.2, ledT, ledT, ledMat, bx, by - floorH * 0.35, fz);
+          const ml = makeBox(ledT, floorH * 0.7 + 0.2, ledT, ledMat, bx - balconyW / 2 - 0.1, by, fz);
+          const mr = makeBox(ledT, floorH * 0.7 + 0.2, ledT, ledMat, bx + balconyW / 2 + 0.1, by, fz);
           hiGroup.add(mt); hiGroup.add(mb); hiGroup.add(ml); hiGroup.add(mr);
           ledArr.push(mt, mb, ml, mr);
 
           if (((f * 17 + c * 31) % 10) < 3) {
             hiGroup.add(makeBox(balconyW - 0.2, floorH * 0.65, 0.04, dfwOrangeMat,
-              bx, byVis, faceSign * (depth / 2 + 0.28)));
+              bx, by, faceSign * (depth / 2 + 0.28)));
           }
         }
       }
