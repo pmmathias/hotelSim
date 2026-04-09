@@ -1776,11 +1776,11 @@ function registerStairFloors(x, z, width, depth, floorH) {
     addFloor(stairX, stairStartZ + stairD + 0.5, stairW + 2, 3, (flight + 1) * floorH);
   }
 
-  // Ground floor walkable surface
-  addFloor(x, z, width - 2, depth - 2, 0);
-  // Floor slabs 1.OG + 2.OG
+  // Ground floor walkable surface (full interior minus 0.5m wall clearance)
+  addFloor(x, z, width - 1, depth - 1, 0);
+  // Floor slabs 1.OG + 2.OG (full interior so players reach rooms near outer walls)
   for (let fl = 1; fl <= 2; fl++) {
-    addFloor(x, z, width - 4, depth - 2, fl * floorH);
+    addFloor(x, z, width - 1, depth - 1, fl * floorH);
   }
 
   // South stairwell wall collider only (west side open to lobby)
