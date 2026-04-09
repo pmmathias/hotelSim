@@ -1351,11 +1351,10 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
         addCollider(ubx + rx - roomW / 2, ubz + rz, 0.3, roomD2, y + H, y);
       }
 
-      // Hallway wall with door opening (1.2m door)
-      // Door dimensions: opening = doorW2 + 0.1 clearance on each side
-      const doorW2 = 1.2;
+      // Hallway wall with door opening (1.8m door — wide enough for comfortable walkthrough)
+      const doorW2 = 1.8;
       const doorH2 = 2.2;
-      const openingW = doorW2 + 0.15; // wall opening matches door + small frame gap
+      const openingW = 2.2; // opening wider than door: 0.7m tolerance each side for player radius 0.4m
       const wallSegW = (roomW - openingW) / 2;
       if (wallSegW > 0.3) {
         // Left segment (full from room edge to opening)
