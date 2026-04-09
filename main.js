@@ -3229,7 +3229,17 @@ class FPSController {
     }
     this.camera.quaternion.setFromEuler(this.euler);
 
-    const speed = MOVE_SPEED * (this.keys.run ? RUN_MULTIPLIER : 1) * dt;
+    // Indoor speed: halved when player is inside a hotel building
+    // (detected via same bounds as floor culling: dx<60, dz<20 from building center)
+    let indoorFactor = 1;
+    const px = this.camera.position.x, pz = this.camera.position.z;
+    for (const fg of floorGroups) {
+      if (Math.abs(px - fg.buildingX) < 60 && Math.abs(pz - fg.buildingZ) < 20) {
+        indoorFactor = 0.5;
+        break;
+      }
+    }
+    const speed = MOVE_SPEED * (this.keys.run ? RUN_MULTIPLIER : 1) * indoorFactor * dt;
     const fwd = this._fwd;
     this.camera.getWorldDirection(fwd);
     fwd.y = 0; fwd.normalize();
