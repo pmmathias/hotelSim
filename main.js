@@ -848,9 +848,9 @@ function updateAutoDoors(camX, camZ, dt) {
     if (shouldOpen && !d.isOpen) d.isOpen = true;
     if (shouldClose && d.isOpen) d.isOpen = false;
 
-    // Smooth animation
+    // Smooth animation (frame-rate independent exponential approach)
     const target = d.isOpen ? 1 : 0;
-    d.t += (target - d.t) * Math.min(1, dt * d.speed);
+    d.t += (target - d.t) * (1 - Math.exp(-dt * d.speed));
 
     if (d.slideAxis === 'x') {
       d.mesh.position.x = d.closedX + d.t * d.slideAmount;
@@ -3502,6 +3502,12 @@ function animate() {
   elapsedTime += dt;
   frameCount++;
 
+  // Update auto-doors BEFORE player movement so colliders are current.
+  // If the doors are updated AFTER movement, the player collides with
+  // the previous frame's door position — causing visible opening but
+  // invisible closed-door colliders blocking passage.
+  updateAutoDoors(camera.position.x, camera.position.z, dt);
+
   controller.update(dt);
 
   // Update LODs via cached array (no scene.traverse!)
@@ -3542,11 +3548,6 @@ function animate() {
   // Custom shader pools (no reflection): update time
   for (const pm of poolWaterMeshes) {
     pm.material.uniforms.uTime.value = elapsedTime;
-  }
-
-  // Auto-doors (check every 3rd frame for performance)
-  if (frameCount % 3 === 0) {
-    updateAutoDoors(camera.position.x, camera.position.z, dt * 3);
   }
 
   // Lift physics (every frame for smooth movement)
