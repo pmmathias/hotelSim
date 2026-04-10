@@ -565,7 +565,7 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
       const inEntranceX = Math.abs(bx) < (entranceW / 2 + balconyW / 2);
       const isGroundFloor = f === 0;
 
-      for (const faceSign of [1, -1]) { // +1=south, -1=north
+      for (const faceSign of [1]) { // +1=south ONLY (pool side — no balconies on north/street side)
         // Skip ground-floor balconies over entrance openings
         if (isGroundFloor && inEntranceX) continue;
 
