@@ -1441,12 +1441,9 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
         group.add(makeBox(wallSegW, H - 0.5, 0.15, wallRoomMat, rx + roomW / 2 - wallSegW / 2, y + (H - 0.5) / 2, hallEdge));
         addCollider(ubx + rx + roomW / 2 - wallSegW / 2, ubz + hallEdge, wallSegW, 0.3, y + H, y);
       }
-      // Wall above door (lintel)
-      const lintelH = H - 0.5 - doorH2;
-      if (lintelH > 0.1) {
-        group.add(makeBox(openingW, lintelH, 0.15, wallRoomMat, rx, y + doorH2 + lintelH / 2, hallEdge));
-        addCollider(ubx + rx, ubz + hallEdge, openingW, 0.3, y + H, y + doorH2);
-      }
+      // Thin lintel beam above door (just a header, not a full wall block)
+      group.add(makeBox(openingW + 0.2, 0.25, 0.15, wallRoomMat, rx, y + doorH2 + 0.125, hallEdge));
+      addCollider(ubx + rx, ubz + hallEdge, openingW + 0.2, 0.3, y + H, y + doorH2);
       // Auto-door (snugly fits the opening)
       addAutoDoor(group, rx, y, hallEdge, doorW2, doorH2, 'x', doorW2 + 0.3,
         _currentBuildingX, _currentBuildingZ, { thinAxis: 'z' });
@@ -1454,17 +1451,25 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
       // Room floor
       group.add(makePlane(roomW - 1, roomD2 - 1, laminateMat, rx, y + 0.2, rz));
 
-      // === BED (against outer wall) ===
-      const outerZ = rz + faceSign * (roomD2 / 2 - 1.5);
-      group.add(makeBox(2.2, 0.35, 1.8, bedFrameMat, rx, y + 0.32, outerZ));
-      group.add(makeBox(2.0, 0.2, 1.6, bedMat, rx, y + 0.55, outerZ));
-      group.add(makeBox(2.2, 0.8, 0.1, bedFrameMat, rx, y + 0.85, outerZ + faceSign * (-0.85)));
-      // Nightstand
-      group.add(makeBox(0.5, 0.5, 0.4, nightMat, rx + 1.4, y + 0.4, outerZ));
-      // Lamp
-      group.add(makeBox(0.15, 0.3, 0.15, getCachedMat('roomlamp', () => new THREE.MeshStandardMaterial({
-        color: 0xffeecc, emissive: 0xffddaa, emissiveIntensity: 0.6 })),
-        rx + 1.4, y + 0.8, outerZ));
+      // === BED (king-size, headboard against outer wall) ===
+      const outerZ = rz + faceSign * (roomD2 / 2 - 1.8);
+      // Bed frame (wider + longer for hotel king-size look)
+      group.add(makeBox(3.0, 0.35, 2.4, bedFrameMat, rx, y + 0.32, outerZ));
+      // Mattress + sheets
+      group.add(makeBox(2.8, 0.22, 2.2, bedMat, rx, y + 0.57, outerZ));
+      // Pillows (2 side by side)
+      group.add(makeBox(0.6, 0.12, 0.4, bedMat, rx - 0.6, y + 0.72, outerZ + faceSign * 0.8));
+      group.add(makeBox(0.6, 0.12, 0.4, bedMat, rx + 0.6, y + 0.72, outerZ + faceSign * 0.8));
+      // Headboard (tall, against the OUTER wall)
+      group.add(makeBox(3.0, 1.0, 0.1, bedFrameMat, rx, y + 1.0, outerZ + faceSign * 1.15));
+      // Nightstands (both sides)
+      group.add(makeBox(0.5, 0.5, 0.4, nightMat, rx + 1.7, y + 0.4, outerZ + faceSign * 0.6));
+      group.add(makeBox(0.5, 0.5, 0.4, nightMat, rx - 1.7, y + 0.4, outerZ + faceSign * 0.6));
+      // Lamps on both nightstands
+      const lampMat = getCachedMat('roomlamp', () => new THREE.MeshStandardMaterial({
+        color: 0xffeecc, emissive: 0xffddaa, emissiveIntensity: 0.6 }));
+      group.add(makeBox(0.15, 0.3, 0.15, lampMat, rx + 1.7, y + 0.8, outerZ + faceSign * 0.6));
+      group.add(makeBox(0.15, 0.3, 0.15, lampMat, rx - 1.7, y + 0.8, outerZ + faceSign * 0.6));
 
       // === BALCONY GLASS DOOR (south rooms only, at outer wall → leads to balcony) ===
       if (isSouth) {
