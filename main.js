@@ -2144,11 +2144,9 @@ function createPool(scene, x, z, w, d) {
   waterSurface.material.uniforms['size'].value = 1.0;
   waterSurface.rotation.x = -Math.PI / 2;
   waterSurface.position.set(x, 0.35, z);
-  waterSurface.frustumCulled = false; // we control visibility manually
   scene.add(waterSurface);
   waterMeshes2.push(waterSurface);
-  // NOT registered as spatialObject — frustum culling was hiding pools
-  // from balconies/upper floors. Visibility controlled in animate loop.
+  registerSpatial(waterSurface);
 
   // Pool floor (visible through water – light blue tiles)
   const poolFloorMat = getCachedMat('poolfloor', () => {
@@ -3653,20 +3651,9 @@ function animate() {
     }
   }
 
-  // Water addon pools: force visible (override frustum culling from quadtree).
-  // Only skip when player is deep inside building hallway (dx<50, dz<10).
-  {
-    const px = camera.position.x, pz = camera.position.z;
-    let deepInside = false;
-    for (const fg of floorGroups) {
-      if (Math.abs(px - fg.buildingX) < 50 && Math.abs(pz - fg.buildingZ) < 10) {
-        deepInside = true; break;
-      }
-    }
-    for (const w of waterMeshes2) {
-      w.visible = !deepInside; // override frustum cull — pools always on unless deep inside
-      w.material.uniforms['time'].value += 0.4 / 60.0;
-    }
+  // Water addon pools: always update time. Visibility handled naturally by Three.js.
+  for (const w of waterMeshes2) {
+    w.material.uniforms['time'].value += 0.4 / 60.0;
   }
   // Custom shader pools (no reflection): update time
   for (const pm of poolWaterMeshes) {
