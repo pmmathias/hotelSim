@@ -230,7 +230,7 @@ function makeBox(w, h, d, mat, x, y, z) {
   // repeats at wall ends are invisible (no cut seams).
   const uvAttr = geo.attributes.uv;
   if (uvAttr) {
-    const metersPerRepeat = 3; // 1 texture repeat per 3 meters of wall
+    const metersPerRepeat = 2; // 1 texture repeat per 2 meters (more visible pattern)
     const sW = w / metersPerRepeat;
     const sH = h / metersPerRepeat;
     const sD = d / metersPerRepeat;
@@ -1421,9 +1421,12 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
         group.add(makeBox(wallSegW, H - 0.5, 0.15, wallRoomMat, rx + roomW / 2 - wallSegW / 2, y + (H - 0.5) / 2, hallEdge));
         addCollider(ubx + rx + roomW / 2 - wallSegW / 2, ubz + hallEdge, wallSegW, 0.3, y + H, y);
       }
-      // Thin lintel beam above door (just a header, not a full wall block)
-      group.add(makeBox(openingW + 0.2, 0.25, 0.15, wallRoomMat, rx, y + doorH2 + 0.125, hallEdge));
-      addCollider(ubx + rx, ubz + hallEdge, openingW + 0.2, 0.3, y + H, y + doorH2);
+      // Wall above door (fills gap from door top to ceiling, same width as opening)
+      const aboveDoorH = (H - 0.5) - doorH2;
+      if (aboveDoorH > 0.1) {
+        group.add(makeBox(openingW, aboveDoorH, 0.15, wallRoomMat, rx, y + doorH2 + aboveDoorH / 2, hallEdge));
+        addCollider(ubx + rx, ubz + hallEdge, openingW, 0.3, y + H, y + doorH2);
+      }
       // Auto-door (snugly fits the opening)
       addAutoDoor(group, rx, y, hallEdge, doorW2, doorH2, 'x', doorW2 + 0.3,
         _currentBuildingX, _currentBuildingZ, { thinAxis: 'z' });
