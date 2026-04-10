@@ -1037,9 +1037,10 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   group.add(makeBox(npW, H - 0.4, 0.06, wallpaperMat, (npW / 2 + 7), (H - 0.4) / 2 + 0.2, D / 2 - 0.4));
 
   // Helper: add wall + collider in one call (LOCAL coords → world via bx/bz)
+  // maxY = H so EG walls don't block upper floors (1.OG/2.OG have their own walls)
   function wall(wx, wz, ww, wd, mat, label) {
     group.add(makeBox(ww, H, wd, mat || damaskMat, wx, H / 2, wz));
-    addCollider(bx + wx, bz + wz, ww, wd);
+    addCollider(bx + wx, bz + wz, ww, wd, H, 0);
   }
 
   // === PARTITION: Lobby/Service divider (horizontal, across building) ===
@@ -1351,10 +1352,10 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
         addCollider(ubx + rx - roomW / 2, ubz + rz, 0.3, roomD2, y + H, y);
       }
 
-      // Hallway wall with door opening (1.8m door — wide enough for comfortable walkthrough)
-      const doorW2 = 1.8;
+      // Hallway wall with door opening (door EXACTLY matches wall opening)
+      const doorW2 = 2.0;
       const doorH2 = 2.2;
-      const openingW = 2.2; // opening wider than door: 0.7m tolerance each side for player radius 0.4m
+      const openingW = doorW2; // door fills the opening completely
       const wallSegW = (roomW - openingW) / 2;
       if (wallSegW > 0.3) {
         // Left segment (full from room edge to opening)
