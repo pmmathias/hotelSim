@@ -136,8 +136,8 @@ function checkCollision(px, pz, py) {
       if (px + PLAYER_RADIUS > c.min.x && px - PLAYER_RADIUS < c.max.x &&
           pz + PLAYER_RADIUS > c.min.z && pz - PLAYER_RADIUS < c.max.z) {
         // Height-limited colliders: only block if player overlaps the height range
-        if (c.maxY < Infinity && feetY > c.maxY) continue;  // player above
-        if (c.minY > -Infinity && headY < c.minY) continue;  // player below
+        if (c.maxY < Infinity && feetY >= c.maxY) continue;  // player at or above top
+        if (c.minY > -Infinity && headY <= c.minY) continue; // player at or below bottom
         return true;
       }
     }
@@ -147,8 +147,8 @@ function checkCollision(px, pz, py) {
     const c = dynamicColliders[i];
     if (px + PLAYER_RADIUS > c.min.x && px - PLAYER_RADIUS < c.max.x &&
         pz + PLAYER_RADIUS > c.min.z && pz - PLAYER_RADIUS < c.max.z) {
-      if (c.maxY < Infinity && feetY > c.maxY) continue;
-      if (c.minY > -Infinity && headY < c.minY) continue;
+      if (c.maxY < Infinity && feetY >= c.maxY) continue;
+      if (c.minY > -Infinity && headY <= c.minY) continue;
       return true;
     }
   }
