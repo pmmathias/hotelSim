@@ -565,48 +565,66 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
       const inEntranceX = Math.abs(bx) < (entranceW / 2 + balconyW / 2);
       const isGroundFloor = f === 0;
 
-      for (const faceSign of [1]) { // +1=south ONLY (pool side — no balconies on north/street side)
-        // Skip ground-floor balconies over entrance openings
+      // === FACADE DECORATION (windows, LEDs) on BOTH sides ===
+      for (const faceSign of [1, -1]) {
         if (isGroundFloor && inEntranceX) continue;
 
-        const fz_bal = faceSign * (depth / 2 + balconyD / 2);
-        const fz_rail = faceSign * (depth / 2 + balconyD);
         const fz_win = faceSign * (depth / 2 + 0.05);
 
-        // === BALCONY (at floor level, with furniture + partition walls) ===
+        // Window glass
+        hiGroup.add(makeBox(balconyW - 0.6, floorH * 0.6, 0.08, glassMat, bx, by, fz_win));
+
+        // DFW LED frames + orange panels
+        if (isFunWorld) {
+          const isCheckerA = (f + c) % 2 === 0;
+          const ledMat = isCheckerA ? dfwLedA : dfwLedB;
+          const ledArr = isCheckerA ? dfwLedMeshesA : dfwLedMeshesB;
+          const ledT = 0.1;
+          const fz = faceSign * (depth / 2 + 0.35);
+          const mt = makeBox(balconyW + 0.2, ledT, ledT, ledMat, bx, by + floorH * 0.35, fz);
+          const mb = makeBox(balconyW + 0.2, ledT, ledT, ledMat, bx, by - floorH * 0.35, fz);
+          const ml = makeBox(ledT, floorH * 0.7 + 0.2, ledT, ledMat, bx - balconyW / 2 - 0.1, by, fz);
+          const mr = makeBox(ledT, floorH * 0.7 + 0.2, ledT, ledMat, bx + balconyW / 2 + 0.1, by, fz);
+          hiGroup.add(mt); hiGroup.add(mb); hiGroup.add(ml); hiGroup.add(mr);
+          ledArr.push(mt, mb, ml, mr);
+          if (((f * 17 + c * 31) % 10) < 3) {
+            hiGroup.add(makeBox(balconyW - 0.2, floorH * 0.65, 0.04, dfwOrangeMat,
+              bx, by, faceSign * (depth / 2 + 0.28)));
+          }
+        }
+      }
+
+      // === BALCONIES on SOUTH side only (pool side) ===
+      if (!(isGroundFloor && inEntranceX)) {
         const walkY = f * floorH;
-        const balcD = balconyD + 0.5; // slightly deeper balcony (1.7m instead of 1.2m)
-        const fz_balDeep = faceSign * (depth / 2 + balcD / 2);
-        const fz_railDeep = faceSign * (depth / 2 + balcD);
+        const balcD = balconyD + 0.5;
+        const fz_balDeep = depth / 2 + balcD / 2;
+        const fz_railDeep = depth / 2 + balcD;
 
         // Platform slab
         hiGroup.add(makeBox(balconyW, 0.15, balcD, balconyMat, bx, walkY + 0.08, fz_balDeep));
         // Front glass railing
         hiGroup.add(makeBox(balconyW, 1.0, 0.05, glassMat, bx, walkY + 0.6, fz_railDeep));
-        // Side partition walls (prevent walking to neighbor balcony)
+        // Side partition walls
         const partMat = getCachedMat('balc_part', () => new THREE.MeshStandardMaterial({
           color: 0xcccccc, roughness: 0.5, metalness: 0.1,
         }));
         hiGroup.add(makeBox(0.08, 1.2, balcD, partMat, bx - balconyW / 2, walkY + 0.7, fz_balDeep));
         hiGroup.add(makeBox(0.08, 1.2, balcD, partMat, bx + balconyW / 2, walkY + 0.7, fz_balDeep));
-        // Side partition colliders (block at balcony height only)
         addCollider(x + bx - balconyW / 2, z + fz_balDeep, 0.15, balcD, walkY + 1.4, walkY - 0.5);
         addCollider(x + bx + balconyW / 2, z + fz_balDeep, 0.15, balcD, walkY + 1.4, walkY - 0.5);
 
-        // Balcony furniture (only upper floors, skip EG)
+        // Balcony furniture (upper floors only)
         if (f > 0) {
-          // Small table
           hiGroup.add(makeBox(0.5, 0.04, 0.5, getCachedMat('balc_table', () => new THREE.MeshStandardMaterial({
             color: 0xaaaaaa, roughness: 0.4, metalness: 0.3 })),
             bx - 0.6, walkY + 0.65, fz_balDeep));
           hiGroup.add(makeBox(0.04, 0.55, 0.04, getCachedMat('balc_leg', () => new THREE.MeshStandardMaterial({
             color: 0x666666, metalness: 0.4 })),
             bx - 0.6, walkY + 0.35, fz_balDeep));
-          // Chair
           hiGroup.add(makeBox(0.4, 0.04, 0.4, getCachedMat('balc_chair', () => new THREE.MeshStandardMaterial({
             color: 0x888888, roughness: 0.5 })),
             bx + 0.6, walkY + 0.42, fz_balDeep));
-          // Potted plant
           const bpotMat = getCachedMat('pot', () => new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.7 }));
           const bplantMat = getCachedMat('plant', () => new THREE.MeshStandardMaterial({ color: 0x2a7a2a, roughness: 0.8 }));
           hiGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.25, 5), bpotMat));
@@ -615,34 +633,9 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
           hiGroup.children[hiGroup.children.length - 1].position.set(bx - balconyW / 2 + 0.3, walkY + 0.5, fz_balDeep);
         }
 
-        // Walkable floor (covers balcony + transition from interior)
-        addFloor(x + bx, z + faceSign * (depth / 2 + balcD / 2), balconyW + 1, balcD + 2, walkY);
-        // Front railing collider
+        // Walkable floor + railing collider
+        addFloor(x + bx, z + fz_balDeep, balconyW + 1, balcD + 2, walkY);
         addCollider(x + bx, z + fz_railDeep, balconyW + 1, 0.1, walkY + 1.2, walkY - 0.5);
-        if (faceSign > 0) {
-          hiGroup.add(makeBox(balconyW - 0.6, floorH * 0.6, 0.08, glassMat, bx, walkY + floorH * 0.4, fz_win));
-        }
-
-        // DFW LED frames + orange panels (skip entrance zone on ground floor)
-        if (isFunWorld) {
-          const isCheckerA = (f + c) % 2 === 0;
-          const ledMat = isCheckerA ? dfwLedA : dfwLedB;
-          const ledArr = isCheckerA ? dfwLedMeshesA : dfwLedMeshesB;
-          const ledT = 0.1;
-          const fz = faceSign * (depth / 2 + 0.35);
-
-          const mt = makeBox(balconyW + 0.2, ledT, ledT, ledMat, bx, by + floorH * 0.35, fz);
-          const mb = makeBox(balconyW + 0.2, ledT, ledT, ledMat, bx, by - floorH * 0.35, fz);
-          const ml = makeBox(ledT, floorH * 0.7 + 0.2, ledT, ledMat, bx - balconyW / 2 - 0.1, by, fz);
-          const mr = makeBox(ledT, floorH * 0.7 + 0.2, ledT, ledMat, bx + balconyW / 2 + 0.1, by, fz);
-          hiGroup.add(mt); hiGroup.add(mb); hiGroup.add(ml); hiGroup.add(mr);
-          ledArr.push(mt, mb, ml, mr);
-
-          if (((f * 17 + c * 31) % 10) < 3) {
-            hiGroup.add(makeBox(balconyW - 0.2, floorH * 0.65, 0.04, dfwOrangeMat,
-              bx, by, faceSign * (depth / 2 + 0.28)));
-          }
-        }
       }
     }
   }
