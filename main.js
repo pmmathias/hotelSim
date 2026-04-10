@@ -3651,19 +3651,19 @@ function animate() {
     }
   }
 
-  // Water addon pools: SKIP reflection when player is DEEP inside a building
-  // (dz < 12 = well inside, not on balcony or near glass doors where pools are visible)
+  // Water addon pools: force visible (override frustum culling from quadtree).
+  // Only skip when player is deep inside building hallway (dx<50, dz<10).
   {
     const px = camera.position.x, pz = camera.position.z;
     let deepInside = false;
     for (const fg of floorGroups) {
-      if (Math.abs(px - fg.buildingX) < 50 && Math.abs(pz - fg.buildingZ) < 12) {
+      if (Math.abs(px - fg.buildingX) < 50 && Math.abs(pz - fg.buildingZ) < 10) {
         deepInside = true; break;
       }
     }
     for (const w of waterMeshes2) {
-      w.visible = !deepInside;
-      if (w.visible) w.material.uniforms['time'].value += 0.4 / 60.0;
+      w.visible = !deepInside; // override frustum cull — pools always on unless deep inside
+      w.material.uniforms['time'].value += 0.4 / 60.0;
     }
   }
   // Custom shader pools (no reflection): update time
