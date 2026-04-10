@@ -1486,10 +1486,11 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
       // === BATHROOM (corner of room, near hallway) ===
       if (r % 3 === 0) { // every 3rd room has detailed bathroom (performance)
         const bathW2 = 2.5, bathD3 = 2.5;
+        const bathPartH = 2.4; // bathroom partition height (not full room height)
         const bathX = rx - roomW / 2 + bathW2 / 2 + 0.5;
         const bathZ = rz - faceSign * (roomD2 / 2 - bathD3 / 2 - 0.5);
-        // Partition wall
-        group.add(makeBox(0.12, H - 1, bathD3, wallRoomMat, bathX + bathW2 / 2, y + (H - 1) / 2, bathZ));
+        // Partition wall (half-height, like a real bathroom screen)
+        group.add(makeBox(0.1, bathPartH, bathD3, wallRoomMat, bathX + bathW2 / 2, y + bathPartH / 2, bathZ));
         // Fixtures
         const ceramicM = getCachedMat('ceramic_white', () => new THREE.MeshStandardMaterial({ color: 0xf2f2f0, roughness: 0.15, metalness: 0.02, envMap, envMapIntensity: 0.3 }));
         const chromeM = getCachedMat('chrome', () => new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.9, roughness: 0.05, envMap, envMapIntensity: 0.6 }));
