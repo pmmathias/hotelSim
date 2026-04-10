@@ -574,11 +574,12 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
 
         hiGroup.add(makeBox(balconyW, 0.15, balconyD, balconyMat, bx, by, fz_bal));
         hiGroup.add(makeBox(balconyW, 1, 0.05, glassMat, bx, by + 0.5, fz_rail));
-        // Walkable floor at ACTUAL floor level (not visual midpoint — otherwise unreachable)
-        // Collider has minY so ground-level players aren't blocked by upper floor railings
+        // Walkable floor: covers balcony + transition zone from interior to balcony
+        // Wider than visual balcony to fill gaps between columns and the interior→exterior seam
         const walkY = f * floorH;
-        addFloor(x + bx, z + faceSign * (depth / 2 + balconyD / 2), balconyW, balconyD, walkY);
-        addCollider(x + bx, z + faceSign * (depth / 2 + balconyD), balconyW, 0.1, walkY + 1.2, walkY - 0.5);
+        addFloor(x + bx, z + faceSign * (depth / 2 + balconyD / 2), balconyW + 1, balconyD + 2, walkY);
+        // Railing collider (only blocks at balcony height, not ground players)
+        addCollider(x + bx, z + faceSign * (depth / 2 + balconyD), balconyW + 1, 0.1, walkY + 1.2, walkY - 0.5);
         if (faceSign > 0) { // windows only on south
           hiGroup.add(makeBox(balconyW - 0.6, floorH * 0.6, 0.08, glassMat, bx, by, fz_win));
         }
