@@ -3651,18 +3651,18 @@ function animate() {
     }
   }
 
-  // Water addon pools: SKIP reflection render when player is inside a building
-  // (pools aren't visible from inside → reflection render is wasted, saves ~6× draw calls)
+  // Water addon pools: SKIP reflection when player is DEEP inside a building
+  // (dz < 12 = well inside, not on balcony or near glass doors where pools are visible)
   {
     const px = camera.position.x, pz = camera.position.z;
-    let playerInside = false;
+    let deepInside = false;
     for (const fg of floorGroups) {
-      if (Math.abs(px - fg.buildingX) < 60 && Math.abs(pz - fg.buildingZ) < 20) {
-        playerInside = true; break;
+      if (Math.abs(px - fg.buildingX) < 50 && Math.abs(pz - fg.buildingZ) < 12) {
+        deepInside = true; break;
       }
     }
     for (const w of waterMeshes2) {
-      w.visible = !playerInside;
+      w.visible = !deepInside;
       if (w.visible) w.material.uniforms['time'].value += 0.4 / 60.0;
     }
   }
