@@ -1431,25 +1431,26 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
       // Room floor
       group.add(makePlane(roomW - 1, roomD2 - 1, laminateMat, rx, y + 0.2, rz));
 
-      // === BED (king-size, headboard against outer wall) ===
-      const outerZ = rz + faceSign * (roomD2 / 2 - 1.8);
-      // Bed frame (wider + longer for hotel king-size look)
-      group.add(makeBox(3.0, 0.35, 2.4, bedFrameMat, rx, y + 0.32, outerZ));
+      // === BED (king-size, headboard against SIDE wall — NOT blocking balcony door) ===
+      const bedZ = rz; // centered in room
+      const bedX = rx - roomW / 2 + 2.0; // against left partition wall
+      // Bed frame (rotated: long axis along Z, headboard on -X side wall)
+      group.add(makeBox(2.4, 0.35, 3.0, bedFrameMat, bedX, y + 0.32, bedZ));
       // Mattress + sheets
-      group.add(makeBox(2.8, 0.22, 2.2, bedMat, rx, y + 0.57, outerZ));
-      // Pillows (2 side by side)
-      group.add(makeBox(0.6, 0.12, 0.4, bedMat, rx - 0.6, y + 0.72, outerZ + faceSign * 0.8));
-      group.add(makeBox(0.6, 0.12, 0.4, bedMat, rx + 0.6, y + 0.72, outerZ + faceSign * 0.8));
-      // Headboard (tall, against the OUTER wall)
-      group.add(makeBox(3.0, 1.0, 0.1, bedFrameMat, rx, y + 1.0, outerZ + faceSign * 1.15));
-      // Nightstands (both sides)
-      group.add(makeBox(0.5, 0.5, 0.4, nightMat, rx + 1.7, y + 0.4, outerZ + faceSign * 0.6));
-      group.add(makeBox(0.5, 0.5, 0.4, nightMat, rx - 1.7, y + 0.4, outerZ + faceSign * 0.6));
-      // Lamps on both nightstands
+      group.add(makeBox(2.2, 0.22, 2.8, bedMat, bedX, y + 0.57, bedZ));
+      // Pillows (2 side by side, against side wall)
+      group.add(makeBox(0.4, 0.12, 0.6, bedMat, bedX - 0.8, y + 0.72, bedZ - 0.6));
+      group.add(makeBox(0.4, 0.12, 0.6, bedMat, bedX - 0.8, y + 0.72, bedZ + 0.6));
+      // Headboard (against left side wall)
+      group.add(makeBox(0.1, 1.0, 3.0, bedFrameMat, bedX - 1.15, y + 1.0, bedZ));
+      // Nightstands (head + foot of bed along Z)
+      group.add(makeBox(0.4, 0.5, 0.5, nightMat, bedX - 0.6, y + 0.4, bedZ + 1.7));
+      group.add(makeBox(0.4, 0.5, 0.5, nightMat, bedX - 0.6, y + 0.4, bedZ - 1.7));
+      // Lamps
       const lampMat = getCachedMat('roomlamp', () => new THREE.MeshStandardMaterial({
         color: 0xffeecc, emissive: 0xffddaa, emissiveIntensity: 0.6 }));
-      group.add(makeBox(0.15, 0.3, 0.15, lampMat, rx + 1.7, y + 0.8, outerZ + faceSign * 0.6));
-      group.add(makeBox(0.15, 0.3, 0.15, lampMat, rx - 1.7, y + 0.8, outerZ + faceSign * 0.6));
+      group.add(makeBox(0.15, 0.3, 0.15, lampMat, bedX - 0.6, y + 0.8, bedZ + 1.7));
+      group.add(makeBox(0.15, 0.3, 0.15, lampMat, bedX - 0.6, y + 0.8, bedZ - 1.7));
 
       // === BALCONY GLASS DOOR (south rooms only, at outer wall → leads to balcony) ===
       if (isSouth) {
