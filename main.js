@@ -622,15 +622,15 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
   registerSpatial(lod);
 
   // Per-wall colliders – entrances on NORTH and SOUTH
-  // East + West walls
+  // East + West walls (full height — no doors on these sides)
   addCollider(x + width / 2, z, wallT, depth);
   addCollider(x - width / 2, z, wallT, depth);
-  // South wall segments (with entrance gap)
-  addCollider(x - (entranceW / 2 + segW / 2), z + depth / 2, segW, wallT);
-  addCollider(x + (entranceW / 2 + segW / 2), z + depth / 2, segW, wallT);
-  // North wall: two segments with entrance gap
-  addCollider(x - (entranceW / 2 + segW / 2), z - depth / 2, segW, wallT);
-  addCollider(x + (entranceW / 2 + segW / 2), z - depth / 2, segW, wallT);
+  // South wall: EG-only collider (upper floors have balcony doors that need to pass through)
+  addCollider(x - (entranceW / 2 + segW / 2), z + depth / 2, segW, wallT, floorH, 0);
+  addCollider(x + (entranceW / 2 + segW / 2), z + depth / 2, segW, wallT, floorH, 0);
+  // North wall: EG-only collider (same reason — upper floor rooms face north too)
+  addCollider(x - (entranceW / 2 + segW / 2), z - depth / 2, segW, wallT, floorH, 0);
+  addCollider(x + (entranceW / 2 + segW / 2), z - depth / 2, segW, wallT, floorH, 0);
 
   return lod;
 }
@@ -1390,11 +1390,15 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
         color: 0xffeecc, emissive: 0xffddaa, emissiveIntensity: 0.6 })),
         rx + 1.4, y + 0.8, outerZ));
 
-      // === BALCONY DOOR (south rooms only, against outer wall) ===
+      // === BALCONY GLASS DOOR (south rooms only, at outer wall → leads to balcony) ===
       if (isSouth) {
-        const balcDoorZ = rz + roomD2 / 2 - 0.1;
+        const balcDoorZ = D / 2 - 0.15; // at the building exterior wall
         addAutoDoor(group, rx, y, balcDoorZ, 2.0, 2.2, 'x', 2.3,
-          _currentBuildingX, _currentBuildingZ, { thinAxis: 'z' });
+          _currentBuildingX, _currentBuildingZ, {
+            thinAxis: 'z',
+            material: glassMat2, // transparent glass door
+          });
+        // Fixed glass panel above door
         group.add(makeBox(2.0, 0.8, 0.08, glassMat2, rx, y + 2.6, balcDoorZ));
       }
 
@@ -3729,11 +3733,12 @@ function animate() {
       }
 
       if (inBuilding) {
-        // Inside: ONLY current floor (not adjacent — adjacent floors are hidden by ceilings)
+        // Inside: ONLY current floor
         fg.group.visible = fg.floorNum === playerFloor;
       } else {
-        // Outside but near: only EG visible through entrance glass
-        fg.group.visible = fg.floorNum === 0;
+        // Outside but near (e.g. on balcony): show current floor + EG
+        // This ensures rooms are visible from balconies and vice versa
+        fg.group.visible = fg.floorNum === 0 || fg.floorNum === playerFloor;
       }
     }
   }
