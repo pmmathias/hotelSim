@@ -450,10 +450,44 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
   walls.push(makeBox(segW, totalH, wallT, wallMat, -(entranceW / 2 + segW / 2), totalH / 2, -depth / 2));
   walls.push(makeBox(segW, totalH, wallT, wallMat, (entranceW / 2 + segW / 2), totalH / 2, -depth / 2));
   walls.push(makeBox(entranceW, totalH - floorH, wallT, wallMat, 0, floorH + (totalH - floorH) / 2, -depth / 2));
-  // South wall: two segments + entrance gap (to pool area)
-  walls.push(makeBox(segW, totalH, wallT, wallMat, -(entranceW / 2 + segW / 2), totalH / 2, depth / 2));
-  walls.push(makeBox(segW, totalH, wallT, wallMat, (entranceW / 2 + segW / 2), totalH / 2, depth / 2));
-  walls.push(makeBox(entranceW, totalH - floorH, wallT, wallMat, 0, floorH + (totalH - floorH) / 2, depth / 2));
+  // South wall: EG solid (two segments + entrance gap), OG with balcony door openings
+  // EG portion (ground floor height only)
+  walls.push(makeBox(segW, floorH, wallT, wallMat, -(entranceW / 2 + segW / 2), floorH / 2, depth / 2));
+  walls.push(makeBox(segW, floorH, wallT, wallMat, (entranceW / 2 + segW / 2), floorH / 2, depth / 2));
+  // Upper portion: split into segments with 2.2m gaps for each balcony door
+  {
+    const ogH = totalH - floorH;
+    const sideW2 = Math.min(8, width * 0.12);
+    const roomsW = width - sideW2 * 2;
+    const roomCount = Math.max(1, Math.floor(roomsW / 8));
+    const roomW = roomsW / roomCount;
+    const doorGap = 2.2; // balcony door width
+    // Build wall pieces between doors for each south wall segment (left + right of entrance)
+    for (const segSign of [-1, 1]) {
+      const segStart = segSign < 0 ? -width / 2 : entranceW / 2;
+      const segEnd = segSign < 0 ? -entranceW / 2 : width / 2;
+      let cursor = segStart;
+      for (let r = 0; r < roomCount; r++) {
+        const rx = -width / 2 + sideW2 + r * roomW + roomW / 2;
+        if (rx - doorGap / 2 < segStart || rx + doorGap / 2 > segEnd) continue; // door outside this segment
+        // Wall piece from cursor to door left edge
+        const pieceW = (rx - doorGap / 2) - cursor;
+        if (pieceW > 0.2) {
+          walls.push(makeBox(pieceW, ogH, wallT, wallMat, cursor + pieceW / 2, floorH + ogH / 2, depth / 2));
+        }
+        // Wall above door (lintel)
+        walls.push(makeBox(doorGap, ogH - 2.4, wallT, wallMat, rx, floorH + 2.4 + (ogH - 2.4) / 2, depth / 2));
+        cursor = rx + doorGap / 2;
+      }
+      // Last piece from last door to segment end
+      const lastW = segEnd - cursor;
+      if (lastW > 0.2) {
+        walls.push(makeBox(lastW, ogH, wallT, wallMat, cursor + lastW / 2, floorH + ogH / 2, depth / 2));
+      }
+    }
+    // Above entrance (no balcony doors in center gap)
+    walls.push(makeBox(entranceW, ogH, wallT, wallMat, 0, floorH + ogH / 2, depth / 2));
+  }
   walls.forEach(w => { w.castShadow = true; w.receiveShadow = true; hiGroup.add(w); });
 
   // Glass entrance auto-doors (north + south) – slide open on approach
