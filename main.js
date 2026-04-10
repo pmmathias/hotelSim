@@ -565,11 +565,43 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
       const inEntranceX = Math.abs(bx) < (entranceW / 2 + balconyW / 2);
       const isGroundFloor = f === 0;
 
-      // === FACADE DECORATION (windows, LEDs) on BOTH sides ===
-      for (const faceSign of [1, -1]) {
+      for (const faceSign of [1, -1]) { // +1=south, -1=north
         if (isGroundFloor && inEntranceX) continue;
 
         const fz_win = faceSign * (depth / 2 + 0.05);
+        const walkY = f * floorH;
+        const balcD = balconyD + 0.5;
+        const fz_balDeep = faceSign * (depth / 2 + balcD / 2);
+        const fz_railDeep = faceSign * (depth / 2 + balcD);
+
+        // === BALCONY structure (platform, railing, partitions) — BOTH sides ===
+        hiGroup.add(makeBox(balconyW, 0.15, balcD, balconyMat, bx, walkY + 0.08, fz_balDeep));
+        hiGroup.add(makeBox(balconyW, 1.0, 0.05, glassMat, bx, walkY + 0.6, fz_railDeep));
+        // Side partitions
+        const partMat = getCachedMat('balc_part', () => new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.5, metalness: 0.1 }));
+        hiGroup.add(makeBox(0.08, 1.2, balcD, partMat, bx - balconyW / 2, walkY + 0.7, fz_balDeep));
+        hiGroup.add(makeBox(0.08, 1.2, balcD, partMat, bx + balconyW / 2, walkY + 0.7, fz_balDeep));
+        addCollider(x + bx - balconyW / 2, z + faceSign * (depth / 2 + balcD / 2), 0.15, balcD, walkY + 1.4, walkY - 0.5);
+        addCollider(x + bx + balconyW / 2, z + faceSign * (depth / 2 + balcD / 2), 0.15, balcD, walkY + 1.4, walkY - 0.5);
+
+        // Balcony furniture (upper floors, south side only — north balconies are decorative)
+        if (f > 0 && faceSign > 0) {
+          hiGroup.add(makeBox(0.5, 0.04, 0.5, getCachedMat('balc_table', () => new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.4, metalness: 0.3 })), bx - 0.6, walkY + 0.65, fz_balDeep));
+          hiGroup.add(makeBox(0.04, 0.55, 0.04, getCachedMat('balc_leg', () => new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.4 })), bx - 0.6, walkY + 0.35, fz_balDeep));
+          hiGroup.add(makeBox(0.4, 0.04, 0.4, getCachedMat('balc_chair', () => new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.5 })), bx + 0.6, walkY + 0.42, fz_balDeep));
+          const bpotMat = getCachedMat('pot', () => new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.7 }));
+          const bplantMat = getCachedMat('plant', () => new THREE.MeshStandardMaterial({ color: 0x2a7a2a, roughness: 0.8 }));
+          hiGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.25, 5), bpotMat));
+          hiGroup.children[hiGroup.children.length - 1].position.set(bx - balconyW / 2 + 0.3, walkY + 0.22, fz_balDeep);
+          hiGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 5, 5), bplantMat));
+          hiGroup.children[hiGroup.children.length - 1].position.set(bx - balconyW / 2 + 0.3, walkY + 0.5, fz_balDeep);
+        }
+
+        // Walkable floor + railing collider (south side only — north is decorative)
+        if (faceSign > 0) {
+          addFloor(x + bx, z + faceSign * (depth / 2 + balcD / 2), balconyW + 1, balcD + 2, walkY);
+          addCollider(x + bx, z + fz_railDeep, balconyW + 1, 0.1, walkY + 1.2, walkY - 0.5);
+        }
 
         // Window glass
         hiGroup.add(makeBox(balconyW - 0.6, floorH * 0.6, 0.08, glassMat, bx, by, fz_win));
@@ -592,50 +624,6 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
               bx, by, faceSign * (depth / 2 + 0.28)));
           }
         }
-      }
-
-      // === BALCONIES on SOUTH side only (pool side) ===
-      if (!(isGroundFloor && inEntranceX)) {
-        const walkY = f * floorH;
-        const balcD = balconyD + 0.5;
-        const fz_balDeep = depth / 2 + balcD / 2;
-        const fz_railDeep = depth / 2 + balcD;
-
-        // Platform slab
-        hiGroup.add(makeBox(balconyW, 0.15, balcD, balconyMat, bx, walkY + 0.08, fz_balDeep));
-        // Front glass railing
-        hiGroup.add(makeBox(balconyW, 1.0, 0.05, glassMat, bx, walkY + 0.6, fz_railDeep));
-        // Side partition walls
-        const partMat = getCachedMat('balc_part', () => new THREE.MeshStandardMaterial({
-          color: 0xcccccc, roughness: 0.5, metalness: 0.1,
-        }));
-        hiGroup.add(makeBox(0.08, 1.2, balcD, partMat, bx - balconyW / 2, walkY + 0.7, fz_balDeep));
-        hiGroup.add(makeBox(0.08, 1.2, balcD, partMat, bx + balconyW / 2, walkY + 0.7, fz_balDeep));
-        addCollider(x + bx - balconyW / 2, z + fz_balDeep, 0.15, balcD, walkY + 1.4, walkY - 0.5);
-        addCollider(x + bx + balconyW / 2, z + fz_balDeep, 0.15, balcD, walkY + 1.4, walkY - 0.5);
-
-        // Balcony furniture (upper floors only)
-        if (f > 0) {
-          hiGroup.add(makeBox(0.5, 0.04, 0.5, getCachedMat('balc_table', () => new THREE.MeshStandardMaterial({
-            color: 0xaaaaaa, roughness: 0.4, metalness: 0.3 })),
-            bx - 0.6, walkY + 0.65, fz_balDeep));
-          hiGroup.add(makeBox(0.04, 0.55, 0.04, getCachedMat('balc_leg', () => new THREE.MeshStandardMaterial({
-            color: 0x666666, metalness: 0.4 })),
-            bx - 0.6, walkY + 0.35, fz_balDeep));
-          hiGroup.add(makeBox(0.4, 0.04, 0.4, getCachedMat('balc_chair', () => new THREE.MeshStandardMaterial({
-            color: 0x888888, roughness: 0.5 })),
-            bx + 0.6, walkY + 0.42, fz_balDeep));
-          const bpotMat = getCachedMat('pot', () => new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.7 }));
-          const bplantMat = getCachedMat('plant', () => new THREE.MeshStandardMaterial({ color: 0x2a7a2a, roughness: 0.8 }));
-          hiGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.25, 5), bpotMat));
-          hiGroup.children[hiGroup.children.length - 1].position.set(bx - balconyW / 2 + 0.3, walkY + 0.22, fz_balDeep);
-          hiGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 5, 5), bplantMat));
-          hiGroup.children[hiGroup.children.length - 1].position.set(bx - balconyW / 2 + 0.3, walkY + 0.5, fz_balDeep);
-        }
-
-        // Walkable floor + railing collider
-        addFloor(x + bx, z + fz_balDeep, balconyW + 1, balcD + 2, walkY);
-        addCollider(x + bx, z + fz_railDeep, balconyW + 1, 0.1, walkY + 1.2, walkY - 0.5);
       }
     }
   }
@@ -1004,11 +992,10 @@ function createStaircase(group, W, D, H, marbleMat, damaskMat, ceilPanelMat) {
   // Stairwell: south back wall only (west side open to lobby for easy access)
   const swH = H * 3;
   group.add(makeBox(stairW + 1, swH, 0.15, damaskMat, stairX, swH / 2, stairStartZ + stairD + 1));
-  // North wall with door opening per floor
+  // North wall: thin lintel above stairwell entrance (each floor)
   for (let fl = 0; fl < 3; fl++) {
     const fy = fl * H;
-    // Above door
-    group.add(makeBox(stairW + 0.5, H - 2.5, 0.15, damaskMat, stairX, fy + 2.5 + (H - 2.5) / 2, stairStartZ - 0.5));
+    group.add(makeBox(stairW + 0.5, 0.3, 0.15, damaskMat, stairX, fy + 2.5 + 0.15, stairStartZ - 0.5));
   }
 
   // Steps for all 3 flights (EG→1.OG, 1.OG→2.OG, 2.OG→roof-landing)
