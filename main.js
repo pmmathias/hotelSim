@@ -537,9 +537,10 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
   // Balconies + windows
   const balconyMat = makePBR('balcony', { color: 0xcccccc, roughness: 0.6 });
   const glassMat = getGlassMat();
-  const balconyW = 4, balconyD = 1.2;
-  const cols = Math.floor(width / (balconyW + 0.5));
-  const startX = -(cols * (balconyW + 0.5)) / 2 + balconyW / 2;
+  const balconyW = 4.2, balconyD = 1.2;  // slightly wider balconies
+  const balcGap = 0.3; // gap between balconies (LED waves visible here)
+  const cols = Math.floor(width / (balconyW + balcGap));
+  const startX = -(cols * (balconyW + balcGap)) / 2 + balconyW / 2;
   const isFunWorld = name.includes('Fun');
 
   // DFW LED materials: two checkerboard colors (warm orange + cool cyan)
@@ -557,7 +558,7 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
 
   for (let f = 0; f < floors; f++) {
     for (let c = 0; c < cols; c++) {
-      const bx = startX + c * (balconyW + 0.5);
+      const bx = startX + c * (balconyW + balcGap);
       const by = (f + 0.5) * floorH;
 
       // Skip balconies in the entrance zone (ground floor, center of building)
@@ -1685,12 +1686,34 @@ function createCity(scene) {
         for (const ssx of [-1, 1]) {
           const shelfX = sx + ssx * (shopBodyW / 2 - shelfW / 2 - 0.5);
           cityGroup.add(makeBox(shelfW, 2.0, 0.4, shelfMat, shelfX, 1.3, sz - sD + 0.6));
-          // Colorful items on shelves
+          // Shop products on shelves (varied by shop type)
+          const shopType = shopCount % 5; // 0=clothing, 1=souvenirs, 2=food, 3=jewelry, 4=toys
+          const colors = [
+            [0xcc3333, 0x3366cc, 0xf5f5f0, 0x2a2a2a, 0xcc9933], // clothing: red/blue/white/black/tan
+            [0xffcc00, 0x44bbff, 0xff6699, 0x88dd44, 0xff8833], // souvenirs: bright
+            [0xdd8833, 0xaacc44, 0xff4444, 0xffee88, 0x885522], // food: warm
+            [0xdddddd, 0xffd700, 0xc0c0c0, 0x88ccff, 0xff88cc], // jewelry: metallic
+            [0xff4488, 0x44ccff, 0xffdd22, 0x66dd66, 0xdd66ff], // toys: vibrant
+          ][shopType];
           for (let row = 0; row < 3; row++) {
-            const itemColor = [0xff6644, 0x44aa66, 0x4488ff, 0xffcc22, 0xaa44ff][((shopCount + row) * 3) % 5];
-            cityGroup.add(makeBox(shelfW * 0.8, 0.15, 0.2,
-              getCachedMat('item_' + itemColor, () => new THREE.MeshStandardMaterial({ color: itemColor, roughness: 0.6 })),
-              shelfX, 0.5 + row * 0.6, sz - sD + 0.55));
+            for (let col = 0; col < 3; col++) {
+              const ic = colors[(row * 3 + col + ssx) % 5];
+              const ix = shelfX + (col - 1) * shelfW * 0.28;
+              const iy = 0.45 + row * 0.55;
+              const mat = getCachedMat('prod_' + ic, () => new THREE.MeshStandardMaterial({
+                color: ic, roughness: 0.5, metalness: shopType === 3 ? 0.6 : 0,
+              }));
+              // Alternate shapes: boxes, cylinders, small spheres
+              if ((row + col) % 3 === 0) {
+                cityGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.18, 6), mat));
+                cityGroup.children[cityGroup.children.length - 1].position.set(ix, iy, sz - sD + 0.5);
+              } else if ((row + col) % 3 === 1) {
+                cityGroup.add(makeBox(0.12, 0.15, 0.08, mat, ix, iy, sz - sD + 0.5));
+              } else {
+                cityGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.07, 5, 5), mat));
+                cityGroup.children[cityGroup.children.length - 1].position.set(ix, iy, sz - sD + 0.5);
+              }
+            }
           }
         }
         // Counter (center)
@@ -1906,18 +1929,18 @@ function createLEDStrips(group, width, depth, totalH, floorH, floors, phase, nam
       const meshArr = (f % 2 === 0) ? meshesBlue : meshesPink;
       const wavePhase = f * 1.2; // each floor has different wave phase
 
-      // South front (pool-facing) – sine wave
-      const m1 = makeWaveTube(mat, sy, depth / 2 + 0.35, wavePhase);
+      // South front (pool-facing) – sine wave, in FRONT of balconies so visible
+      const m1 = makeWaveTube(mat, sy, depth / 2 + 1.8, wavePhase);
       meshArr.push(m1);
       group.add(m1);
-      // North front (street-facing) – mirrored sine wave
-      const m2 = makeWaveTube(mat, sy, -(depth / 2 + 0.35), wavePhase + Math.PI);
+      // North front (street-facing) – mirrored sine wave, in front of balconies
+      const m2 = makeWaveTube(mat, sy, -(depth / 2 + 1.8), wavePhase + Math.PI);
       meshArr.push(m2);
       group.add(m2);
     }
 
-    // Roofline in blue (wave-shaped too)
-    for (const fz of [depth / 2 + 0.35, -(depth / 2 + 0.35)]) {
+    // Roofline in blue (wave-shaped too), in front of balconies
+    for (const fz of [depth / 2 + 1.8, -(depth / 2 + 1.8)]) {
       const m = makeWaveTube(blueMat, totalH + 0.05, fz, 0);
       meshesBlue.push(m);
       group.add(m);
