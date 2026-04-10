@@ -2144,9 +2144,11 @@ function createPool(scene, x, z, w, d) {
   waterSurface.material.uniforms['size'].value = 1.0;
   waterSurface.rotation.x = -Math.PI / 2;
   waterSurface.position.set(x, 0.35, z);
+  waterSurface.frustumCulled = false; // we control visibility manually
   scene.add(waterSurface);
   waterMeshes2.push(waterSurface);
-  registerSpatial(waterSurface);
+  // NOT registered as spatialObject — frustum culling was hiding pools
+  // from balconies/upper floors. Visibility controlled in animate loop.
 
   // Pool floor (visible through water – light blue tiles)
   const poolFloorMat = getCachedMat('poolfloor', () => {
