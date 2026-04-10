@@ -1033,17 +1033,19 @@ function createStaircase(group, W, D, H, marbleMat, damaskMat, ceilPanelMat) {
       group.add(step);
     }
 
-    // Railing (inner side, west)
+    // Railing (inner side, west) — use a thin box tilted to follow the stair slope
+    const railAngle = Math.atan2(H, stairD); // slope angle
     const railLen = Math.sqrt(stairD * stairD + H * H);
-    const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, railLen, 4), railMat);
-    rail.position.set(stairX - stairW / 2 + 0.3, baseY + H / 2, stairStartZ + stairD / 2);
-    rail.rotation.x = Math.atan2(H, stairD);
-    group.add(rail);
+    const railBox = makeBox(0.06, 0.06, railLen, railMat,
+      stairX - stairW / 2 + 0.3, baseY + H / 2 + 0.5, stairStartZ + stairD / 2);
+    railBox.rotation.x = -railAngle; // tilt along Z-axis (stair goes +Z and +Y)
+    group.add(railBox);
 
     // Railing posts every 4 steps
     for (let s = 0; s <= stepsPerFlight; s += 4) {
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1, 4), railMat);
-      post.position.set(stairX - stairW / 2 + 0.3, baseY + s * stepH + 0.5, stairStartZ + s * stepD);
+      const postH = 0.9;
+      const post = makeBox(0.05, postH, 0.05, railMat,
+        stairX - stairW / 2 + 0.3, baseY + s * stepH + postH / 2 + 0.1, stairStartZ + s * stepD);
       group.add(post);
     }
 
