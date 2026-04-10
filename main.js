@@ -2131,8 +2131,8 @@ const waterMeshes2 = [];    // Water addon pools (planar reflection)
 function createPool(scene, x, z, w, d) {
   // ALL pools use Water addon (identical look everywhere)
   const waterSurface = new Water(new THREE.PlaneGeometry(w, d), {
-    textureWidth: 512,
-    textureHeight: 512,
+    textureWidth: 256,
+    textureHeight: 256,
     waterNormals: getWaterNormals(),
     sunDirection: new THREE.Vector3(0.5, 0.7, 0.4).normalize(),
     sunColor: 0xffffff,
@@ -3504,7 +3504,7 @@ function init() {
   composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
   composer.addPass(new UnrealBloomPass(
-    new THREE.Vector2(window.innerWidth / 2, window.innerHeight / 2), 0.3, 0.4, 0.88));
+    new THREE.Vector2(window.innerWidth / 4, window.innerHeight / 4), 0.3, 0.4, 0.88));
   composer.addPass(new OutputPass());
 
   loadBar.style.width = '90%';
@@ -3651,9 +3651,20 @@ function animate() {
     }
   }
 
-  // Water addon pools (planar reflection): update time
-  for (const w of waterMeshes2) {
-    w.material.uniforms['time'].value += 0.4 / 60.0; // pool-calm, not ocean-choppy
+  // Water addon pools: SKIP reflection render when player is inside a building
+  // (pools aren't visible from inside → reflection render is wasted, saves ~6× draw calls)
+  {
+    const px = camera.position.x, pz = camera.position.z;
+    let playerInside = false;
+    for (const fg of floorGroups) {
+      if (Math.abs(px - fg.buildingX) < 60 && Math.abs(pz - fg.buildingZ) < 20) {
+        playerInside = true; break;
+      }
+    }
+    for (const w of waterMeshes2) {
+      w.visible = !playerInside;
+      if (w.visible) w.material.uniforms['time'].value += 0.4 / 60.0;
+    }
   }
   // Custom shader pools (no reflection): update time
   for (const pm of poolWaterMeshes) {
