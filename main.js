@@ -572,16 +572,16 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
         const fz_rail = faceSign * (depth / 2 + balconyD);
         const fz_win = faceSign * (depth / 2 + 0.05);
 
-        hiGroup.add(makeBox(balconyW, 0.15, balconyD, balconyMat, bx, by, fz_bal));
-        hiGroup.add(makeBox(balconyW, 1, 0.05, glassMat, bx, by + 0.5, fz_rail));
-        // Walkable floor: covers balcony + transition zone from interior to balcony
-        // Wider than visual balcony to fill gaps between columns and the interior→exterior seam
+        // Balcony visual at FLOOR level (not window midpoint) so player sees it when standing
         const walkY = f * floorH;
+        hiGroup.add(makeBox(balconyW, 0.15, balconyD, balconyMat, bx, walkY + 0.08, fz_bal));
+        hiGroup.add(makeBox(balconyW, 1.0, 0.05, glassMat, bx, walkY + 0.6, fz_rail));
+        // Walkable floor: wider+deeper to fill gaps between columns and interior→exterior seam
         addFloor(x + bx, z + faceSign * (depth / 2 + balconyD / 2), balconyW + 1, balconyD + 2, walkY);
-        // Railing collider (only blocks at balcony height, not ground players)
+        // Railing collider at balcony height
         addCollider(x + bx, z + faceSign * (depth / 2 + balconyD), balconyW + 1, 0.1, walkY + 1.2, walkY - 0.5);
         if (faceSign > 0) { // windows only on south
-          hiGroup.add(makeBox(balconyW - 0.6, floorH * 0.6, 0.08, glassMat, bx, by, fz_win));
+          hiGroup.add(makeBox(balconyW - 0.6, floorH * 0.6, 0.08, glassMat, bx, walkY + floorH * 0.4, fz_win));
         }
 
         // DFW LED frames + orange panels (skip entrance zone on ground floor)
