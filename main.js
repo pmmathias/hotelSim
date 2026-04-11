@@ -2403,11 +2403,11 @@ function createAmphitheater(scene, x, z, rotation = 0, size = 'small') {
   const screenW = stageW - 3;
   const screenH = backdropH - 1.5;
   const screenCanvas = document.createElement('canvas');
-  screenCanvas.width = 512; screenCanvas.height = 128;
+  screenCanvas.width = 1024; screenCanvas.height = 256;
   const screenTex = new THREE.CanvasTexture(screenCanvas);
   screenTex.wrapS = THREE.RepeatWrapping;
   const screenMat = new THREE.MeshStandardMaterial({
-    map: screenTex, emissive: 0xffffff, emissiveIntensity: 2.0, emissiveMap: screenTex, roughness: 0.05,
+    map: screenTex, emissive: 0xffffff, emissiveIntensity: 0.8, emissiveMap: screenTex, roughness: 0.3,
   });
   const screenMesh = makeBox(screenW, screenH, 0.1, screenMat, 0, stageH + backdropH / 2 + 0.3, -stageD / 2 + 0.45);
   group.add(screenMesh);
@@ -3663,8 +3663,8 @@ function animate() {
       const t = elapsedTime;
       const pattern = window.__screenPattern % 8;
 
-      // Dark background (near black)
-      ctx.fillStyle = '#060612';
+      // Dark blue/purple background (not pure black — needs to glow through emissiveMap)
+      ctx.fillStyle = warm ? '#1a0a08' : '#08081a';
       ctx.fillRect(0, 0, w, h);
 
       // DFW (large) = warm colors (orange/pink/gold), DWW (small) = cool colors (blue/cyan/teal)
@@ -3830,21 +3830,12 @@ function animate() {
   if (frameCount % 2 === 0 && isNightMode) {
     for (const strip of ledStrips) {
       if (strip.style === 'screen') {
-        // Stage LED screens: cycle through pattern colors (not just hue)
-        // Alternates between warm/cool palettes every ~3 seconds
-        const pattern = Math.floor(elapsedTime * 0.35 + strip.phase) % 5;
-        const t = (elapsedTime * 0.5 + strip.phase) % 1.0;
-        switch (pattern) {
-          case 0: _tmpColor.setRGB(0.1 + t * 0.3, 0.1, 0.8 - t * 0.4); break; // deep blue→purple
-          case 1: _tmpColor.setRGB(0.9, 0.3 + t * 0.5, 0.1); break;           // fire orange→yellow
-          case 2: _tmpColor.setRGB(0.1, 0.6 + t * 0.3, 0.4 + t * 0.3); break; // teal→aqua
-          case 3: _tmpColor.setRGB(0.7 + t * 0.3, 0.1, 0.5 + t * 0.3); break; // magenta→pink
-          case 4: _tmpColor.setRGB(t * 0.3, 0.8 - t * 0.3, 0.1 + t * 0.5); break; // green→cyan
-        }
-        const pulse = 1.0 + Math.sin(elapsedTime * 4 + strip.phase * 5) * 0.4;
-        strip.mat.emissive.copy(_tmpColor);
-        strip.mat.emissiveIntensity = pulse * 52.5;
-        strip.mat.color.copy(_tmpColor);
+        // Stage LED screens: the Canvas texture IS the animation.
+        // Just gently pulse the emissive intensity so patterns glow without being washed out.
+        const pulse = 0.8 + Math.sin(elapsedTime * 2 + strip.phase * 3) * 0.2;
+        strip.mat.emissive.setRGB(1, 1, 1); // white emissive = show canvas colors as-is
+        strip.mat.emissiveIntensity = pulse;
+        strip.mat.color.setRGB(0.1, 0.1, 0.1); // dark base so emissiveMap dominates
       } else if (strip.style === 'disco') {
         // Disco lights: rapid strobe-like color flashing
         const hue = (elapsedTime * 0.5 + strip.phase) % 1.0;
