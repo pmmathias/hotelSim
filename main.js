@@ -2399,9 +2399,9 @@ function createAmphitheater(scene, x, z, rotation = 0, size = 'small') {
   }));
   group.add(makeBox(stageW, backdropH, 0.4, backdropMat, 0, stageH + backdropH / 2, -stageD / 2 + 0.2));
 
-  // LED screen — nearly fills entire backdrop wall
-  const screenW = stageW - 1;
-  const screenH = backdropH - 0.5;
+  // LED screen (smaller than backdrop, framed by LED strips)
+  const screenW = stageW - 3;
+  const screenH = backdropH - 1.5;
   const screenCanvas = document.createElement('canvas');
   screenCanvas.width = 512; screenCanvas.height = 128;
   const screenTex = new THREE.CanvasTexture(screenCanvas);
@@ -3671,26 +3671,29 @@ function animate() {
       const warm = sc.isLarge;
       const cx = w / 2, cy = h / 2;
 
+      // Scale factor: patterns fill ~80% of screen canvas
+      const S = Math.min(w, h * 2) * 0.4; // base scale unit
+
       switch (pattern) {
-        case 0: { // Centered pulsing rings
-          for (let i = 5; i >= 0; i--) {
-            const r = 15 + i * 12 + Math.sin(t * 2 + i * 0.7) * 6;
-            const alpha = 0.4 + Math.sin(t * 3 + i) * 0.2;
+        case 0: { // LARGE centered pulsing rings
+          for (let i = 6; i >= 0; i--) {
+            const r = S * 0.15 + i * S * 0.12 + Math.sin(t * 2 + i * 0.7) * S * 0.05;
+            const alpha = 0.5 + Math.sin(t * 3 + i) * 0.2;
             ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
             ctx.strokeStyle = warm
               ? `rgba(255,${120 + i * 20},${50 + i * 10},${alpha})`
               : `rgba(${50 + i * 10},${150 + i * 15},255,${alpha})`;
-            ctx.lineWidth = 2; ctx.stroke();
+            ctx.lineWidth = 3; ctx.stroke();
           }
           break;
         }
-        case 1: { // Floating stars (small, centered cluster)
-          for (let i = 0; i < 20; i++) {
-            const a = (i / 20) * Math.PI * 2 + t * 0.5;
-            const r = 20 + Math.sin(t + i * 1.3) * 18;
+        case 1: { // LARGE floating stars
+          for (let i = 0; i < 30; i++) {
+            const a = (i / 30) * Math.PI * 2 + t * 0.5;
+            const r = S * 0.3 + Math.sin(t + i * 1.3) * S * 0.2;
             const sx = cx + Math.cos(a) * r;
-            const sy = cy + Math.sin(a) * r * 0.5;
-            const size = 1.5 + Math.sin(t * 3 + i) * 1;
+            const sy = cy + Math.sin(a) * r * 0.4;
+            const size = 3 + Math.sin(t * 3 + i) * 2;
             ctx.fillStyle = warm
               ? `hsl(${30 + i * 5}, 100%, ${60 + Math.sin(t * 2 + i) * 15}%)`
               : `hsl(${190 + i * 5}, 90%, ${55 + Math.sin(t * 2 + i) * 15}%)`;
@@ -3698,87 +3701,90 @@ function animate() {
           }
           break;
         }
-        case 2: { // Geometric diamond rotation
+        case 2: { // LARGE geometric diamonds
           ctx.save(); ctx.translate(cx, cy);
           for (let i = 0; i < 6; i++) {
             ctx.rotate(t * 0.3 + i * Math.PI / 3);
-            const s = 10 + i * 8 + Math.sin(t * 2) * 3;
+            const s = S * 0.1 + i * S * 0.15 + Math.sin(t * 2) * S * 0.03;
             ctx.strokeStyle = warm
-              ? `rgba(255,${100 + i * 25},${30 + i * 10},0.6)`
-              : `rgba(${30 + i * 10},${160 + i * 15},255,0.6)`;
-            ctx.lineWidth = 1.5;
+              ? `rgba(255,${100 + i * 25},${30 + i * 10},0.7)`
+              : `rgba(${30 + i * 10},${160 + i * 15},255,0.7)`;
+            ctx.lineWidth = 3;
             ctx.strokeRect(-s / 2, -s / 2, s, s);
           }
           ctx.restore();
           break;
         }
-        case 3: { // Sine wave pattern (centered, not full-screen)
-          ctx.strokeStyle = warm ? '#ff6633' : '#3388ff';
-          ctx.lineWidth = 2;
-          for (let line = -2; line <= 2; line++) {
+        case 3: { // LARGE sine waves (full width)
+          ctx.lineWidth = 4;
+          for (let line = -3; line <= 3; line++) {
             ctx.beginPath();
-            for (let x = cx - 180; x < cx + 180; x += 3) {
-              const dx = (x - cx) / 180;
-              const env = 1 - dx * dx; // fade at edges
-              ctx.lineTo(x, cy + line * 12 + Math.sin(dx * 8 + t * 3 + line) * 15 * env);
+            for (let lx = 10; lx < w - 10; lx += 3) {
+              const dx = (lx - cx) / (w * 0.45);
+              const env = 1 - dx * dx;
+              ctx.lineTo(lx, cy + line * h * 0.12 + Math.sin(dx * 6 + t * 3 + line) * h * 0.25 * env);
             }
-            ctx.globalAlpha = 0.4 + line * 0.1;
+            ctx.strokeStyle = warm
+              ? `rgba(255,${150 + line * 15},50,${0.5 + line * 0.05})`
+              : `rgba(50,${150 + line * 15},255,${0.5 + line * 0.05})`;
             ctx.stroke();
           }
-          ctx.globalAlpha = 1;
           break;
         }
-        case 4: { // Pulsing hotel name (centered, subtle glow)
+        case 4: { // LARGE hotel name (fills screen)
           const name = sc.isLarge ? 'DREAM FUN WORLD' : 'DREAM WATER WORLD';
-          ctx.font = 'bold 36px sans-serif';
+          ctx.font = `bold ${Math.floor(h * 0.65)}px sans-serif`;
           ctx.textAlign = 'center';
-          const glow = 0.5 + Math.sin(t * 2) * 0.3;
+          const glow = 0.6 + Math.sin(t * 2) * 0.3;
           ctx.fillStyle = warm
             ? `rgba(255,140,50,${glow})`
             : `rgba(80,180,255,${glow})`;
-          ctx.fillText(name, cx, cy + 12);
+          ctx.fillText(name, cx, cy + h * 0.2);
           ctx.textAlign = 'left';
           break;
         }
-        case 5: { // Rotating dot circle
-          for (let i = 0; i < 16; i++) {
-            const a = (i / 16) * Math.PI * 2 + t * 1.5;
-            const r = 30 + Math.sin(t * 2 + i * 0.5) * 8;
-            const dotR = 3 + Math.sin(t * 4 + i) * 1.5;
+        case 5: { // LARGE rotating dot circle
+          for (let i = 0; i < 20; i++) {
+            const a = (i / 20) * Math.PI * 2 + t * 1.5;
+            const r = S * 0.35 + Math.sin(t * 2 + i * 0.5) * S * 0.1;
+            const dotR = 5 + Math.sin(t * 4 + i) * 3;
             ctx.fillStyle = warm
-              ? `hsl(${(i * 22 + 10) % 60}, 100%, ${50 + Math.sin(t + i) * 15}%)`
-              : `hsl(${(i * 22 + 180) % 240 + 160}, 80%, ${45 + Math.sin(t + i) * 15}%)`;
+              ? `hsl(${(i * 18 + 10) % 60}, 100%, ${50 + Math.sin(t + i) * 15}%)`
+              : `hsl(${(i * 18 + 180) % 240 + 160}, 80%, ${45 + Math.sin(t + i) * 15}%)`;
             ctx.beginPath();
-            ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.6, dotR, 0, Math.PI * 2);
+            ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.5, dotR, 0, Math.PI * 2);
             ctx.fill();
           }
           break;
         }
-        case 6: { // Particle fountain (centered, upward motion)
-          for (let i = 0; i < 25; i++) {
-            const age = (t * 0.8 + i * 0.2) % 2;
-            const px = cx + Math.sin(i * 2.7 + t * 0.3) * age * 40;
-            const py = cy + 30 - age * 50;
-            const alpha = Math.max(0, 1 - age * 0.6);
+        case 6: { // LARGE particle fountain
+          for (let i = 0; i < 40; i++) {
+            const age = (t * 0.8 + i * 0.15) % 2;
+            const fpx = cx + Math.sin(i * 2.7 + t * 0.3) * age * w * 0.2;
+            const fpy = cy + h * 0.3 - age * h * 0.7;
+            const alpha = Math.max(0, 1 - age * 0.5);
+            const dotR = 3 + (1 - age) * 3;
             ctx.fillStyle = warm
               ? `rgba(255,${160 - age * 60},${60 - age * 30},${alpha})`
               : `rgba(${80 - age * 30},${200 - age * 40},255,${alpha})`;
-            ctx.beginPath(); ctx.arc(px, py, 2, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(fpx, fpy, dotR, 0, Math.PI * 2); ctx.fill();
           }
           break;
         }
-        case 7: { // "WELCOME" with subtle star accent
-          ctx.font = 'bold 42px sans-serif';
+        case 7: { // LARGE "WELCOME"
+          ctx.font = `bold ${Math.floor(h * 0.7)}px sans-serif`;
           ctx.textAlign = 'center';
-          const pulse = 0.6 + Math.sin(t * 1.5) * 0.2;
+          const pulse = 0.7 + Math.sin(t * 1.5) * 0.2;
           ctx.fillStyle = warm ? `rgba(255,200,100,${pulse})` : `rgba(100,200,255,${pulse})`;
-          ctx.fillText('WELCOME', cx, cy + 14);
-          // Small star accents
-          for (let i = 0; i < 6; i++) {
-            const sx = cx - 120 + i * 48;
-            const sy = cy - 25 + Math.sin(t * 2 + i) * 5;
-            ctx.fillStyle = warm ? `rgba(255,180,80,0.5)` : `rgba(100,180,255,0.5)`;
-            ctx.beginPath(); ctx.arc(sx, sy, 1.5, 0, Math.PI * 2); ctx.fill();
+          ctx.fillText('WELCOME', cx, cy + h * 0.22);
+          // Star accents around text
+          for (let i = 0; i < 10; i++) {
+            const a = (i / 10) * Math.PI * 2 + t;
+            const sr = S * 0.45;
+            const sx = cx + Math.cos(a) * sr;
+            const sy = cy + Math.sin(a) * sr * 0.4;
+            ctx.fillStyle = warm ? `rgba(255,180,80,0.6)` : `rgba(100,180,255,0.6)`;
+            ctx.beginPath(); ctx.arc(sx, sy, 3, 0, Math.PI * 2); ctx.fill();
           }
           ctx.textAlign = 'left';
           break;
