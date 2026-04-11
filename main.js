@@ -837,12 +837,14 @@ function updateLifts(cam, dt) {
         break;
 
       case 'waiting':
-        // Doors open, wait for player to LEAVE before accepting next trip
+        // Doors open for 3 seconds, then ready for next trip
         lift.doorL.position.z = lift.doorClosedZL - 1;
         lift.doorR.position.z = lift.doorClosedZR + 1;
-        if (!inLift) {
-          // Player stepped out → ready for next trip
+        lift.timer += dt;
+        if (!inLift || lift.timer > 3.0) {
+          // Player stepped out OR 3 seconds passed → ready for next trip
           lift.state = 'idle';
+          lift.timer = 0;
         }
         break;
 
@@ -1421,9 +1423,9 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
         group.add(makeBox(openingW, aboveDoorH, 0.15, wallRoomMat, rx, y + doorH2 + aboveDoorH / 2, hallEdge));
         addCollider(ubx + rx, ubz + hallEdge, openingW, 0.3, y + H, y + doorH2);
       }
-      // Auto-door (snugly fits the opening)
+      // Room glass door (visible, recognizable as a door)
       addAutoDoor(group, rx, y, hallEdge, doorW2, doorH2, 'x', doorW2 + 0.3,
-        _currentBuildingX, _currentBuildingZ, { thinAxis: 'z' });
+        _currentBuildingX, _currentBuildingZ, { thinAxis: 'z', material: glassMat2 });
 
       // Room floor
       group.add(makePlane(roomW - 1, roomD2 - 1, laminateMat, rx, y + 0.2, rz));
@@ -1870,8 +1872,7 @@ function registerStairFloors(x, z, width, depth, floorH) {
     addFloor(x, z, width - 1, depth - 1, fl * floorH);
   }
 
-  // South stairwell wall collider only (west side open to lobby)
-  addCollider(stairX, stairStartZ + stairD + 1, stairW + 1, 0.3);
+  // Stairwell is fully open (no wall colliders — hallway walls provide containment)
 }
 
 // ---------------------------------------------------------------------------
