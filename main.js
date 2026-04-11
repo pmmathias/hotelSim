@@ -235,11 +235,12 @@ function makeBox(w, h, d, mat, x, y, z) {
     const sH = h / metersPerRepeat;
     const sD = d / metersPerRepeat;
     for (let i = 0; i < uvAttr.count; i++) {
-      const faceIdx = Math.floor(i / 4); // 6 faces, 4 verts each
+      // BoxGeometry face order: +X, -X, +Y, -Y, +Z, -Z (4 verts each)
+      const faceIdx = Math.floor(i / 4);
       let su, sv;
-      if (faceIdx < 2) { su = sW; sv = sH; }      // +/- Z faces (front/back)
-      else if (faceIdx < 4) { su = sW; sv = sD; }  // +/- Y faces (top/bottom)
-      else { su = sD; sv = sH; }                    // +/- X faces (left/right)
+      if (faceIdx < 2) { su = sD; sv = sH; }      // ±X faces (left/right walls: depth × height)
+      else if (faceIdx < 4) { su = sW; sv = sD; }  // ±Y faces (top/bottom: width × depth)
+      else { su = sW; sv = sH; }                    // ±Z faces (front/back walls: width × height)
       uvAttr.setXY(i,
         uvAttr.getX(i) * su,
         uvAttr.getY(i) * sv
