@@ -649,9 +649,9 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
     }
   }
 
-  // Hotel interior (all 3 floors)
+  // Hotel interior (all floors)
   _currentBuildingX = x; _currentBuildingZ = z;
-  createHotelInterior(hiGroup, width, depth, floorH, name);
+  createHotelInterior(hiGroup, width, depth, floorH, name, floors);
 
   // === LOW-DETAIL (shown far) – single colored box ===
   const loGroup = new THREE.Group();
@@ -833,7 +833,8 @@ function updateLifts(cam, dt) {
         if (inLift) {
           lift.state = 'closing';
           lift.timer = 0;
-          lift.targetFloor = (lift.currentFloor + 1) % 3;
+          // Always go UP; wrap to 0 at the top (use stairs to go down)
+          lift.targetFloor = (lift.currentFloor + 1) % (lift.maxFloor || 3);
         }
         break;
 
@@ -851,7 +852,7 @@ function updateLifts(cam, dt) {
 
       case 'closing':
         lift.timer += dt;
-        const closeT = Math.min(1, lift.timer / 1.0);
+        const closeT = Math.min(1, lift.timer / 0.5); // close in 0.5s (was 1s)
         lift.doorL.position.z = lift.doorClosedZL - 1 + closeT * 1;
         lift.doorR.position.z = lift.doorClosedZR + 1 - closeT * 1;
         if (closeT >= 1) {
@@ -933,8 +934,9 @@ function updateAutoDoors(camX, camZ, dt) {
 // =============================================================================
 let _currentBuildingX = 0, _currentBuildingZ = 0; // set by createHotelBuilding for door registration
 
-function createHotelInterior(group, width, depth, floorH, name) {
+function createHotelInterior(group, width, depth, floorH, name, floors = 3) {
   const W = width, D = depth, H = floorH, T = 0.5;
+  const numFloors = Math.min(floors, 6); // cap at 6 for performance
   const isWater = name.includes('Water');
   const isFun = name.includes('Fun');
   const accentColor = isWater ? 0x1155aa : isFun ? 0xff4488 : 0x44aa88;
@@ -963,23 +965,22 @@ function createHotelInterior(group, width, depth, floorH, name) {
   group.add(egGroup);
   floorGroups.push({ group: egGroup, buildingX: _currentBuildingX, buildingZ: _currentBuildingZ, floorNum: 0, yMin: 0, yMax: H });
 
-  // === STAIRCASE (east side, all 3 floors – always visible) ===
-  createStaircase(group, W, D, H, marbleMat, damaskMat, ceilPanelMat);
+  // Set lift maxFloor for the most recently added lift (created in createGroundFloor)
+  if (lifts.length > 0) lifts[lifts.length - 1].maxFloor = numFloors;
 
-  // === 1. OG (y=H..2H) ===
-  const og1Group = new THREE.Group();
-  createUpperFloor(og1Group, W, D, H, 1, damaskMat, ceilMat, woodMat, ceilPanelMat, accentColor);
-  group.add(og1Group);
-  floorGroups.push({ group: og1Group, buildingX: _currentBuildingX, buildingZ: _currentBuildingZ, floorNum: 1, yMin: H, yMax: H * 2 });
+  // === STAIRCASE (all floors – always visible) ===
+  createStaircase(group, W, D, H, marbleMat, damaskMat, ceilPanelMat, numFloors);
 
-  // === 2. OG (y=2H..3H) ===
-  const og2Group = new THREE.Group();
-  createUpperFloor(og2Group, W, D, H, 2, damaskMat, ceilMat, woodMat, ceilPanelMat, accentColor);
-  group.add(og2Group);
-  floorGroups.push({ group: og2Group, buildingX: _currentBuildingX, buildingZ: _currentBuildingZ, floorNum: 2, yMin: H * 2, yMax: H * 3 });
+  // === UPPER FLOORS (1.OG through top floor) ===
+  for (let fl = 1; fl < numFloors; fl++) {
+    const ogGroup = new THREE.Group();
+    createUpperFloor(ogGroup, W, D, H, fl, damaskMat, ceilMat, woodMat, ceilPanelMat, accentColor);
+    group.add(ogGroup);
+    floorGroups.push({ group: ogGroup, buildingX: _currentBuildingX, buildingZ: _currentBuildingZ, floorNum: fl, yMin: H * fl, yMax: H * (fl + 1) });
+  }
 }
 
-function createStaircase(group, W, D, H, marbleMat, damaskMat, ceilPanelMat) {
+function createStaircase(group, W, D, H, marbleMat, damaskMat, ceilPanelMat, numFloors = 3) {
   const stairW = Math.min(5, W * 0.06);  // wider stairs, scaled to building
   const stairX = W / 2 - stairW / 2 - 1; // against east wall with 1m clearance
   const stairD = Math.min(10, D * 0.4);   // max 40% of building depth
@@ -995,8 +996,8 @@ function createStaircase(group, W, D, H, marbleMat, damaskMat, ceilPanelMat) {
   // Stairwell: open on all sides (no back wall, no floating lintels)
   // Hallway walls and floor slabs provide sufficient containment
 
-  // Steps for all 3 flights (EG→1.OG, 1.OG→2.OG, 2.OG→roof-landing)
-  for (let flight = 0; flight < 2; flight++) {
+  // Steps for all flights (EG→1.OG, 1.OG→2.OG, etc.)
+  for (let flight = 0; flight < numFloors - 1; flight++) {
     const baseY = flight * H;
     const stepsPerFlight = 20;
     const stepH = H / stepsPerFlight;
@@ -1183,6 +1184,7 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
     currentFloor: 0, state: 'idle', timer: 0, targetFloor: 0,
     doorL: liftDoorL, doorR: liftDoorR,
     doorClosedZL: liftZ - 0.5, doorClosedZR: liftZ + 0.5,
+    maxFloor: 6, // set later by createHotelInterior
   });
   // Lift interior (mirror, buttons, light)
   const mirrorMat2 = getCachedMat('mirror', () => new THREE.MeshStandardMaterial({ color: 0xaabbcc, roughness: 0.02, metalness: 0.8, envMap, envMapIntensity: 1.0 }));
@@ -1846,34 +1848,29 @@ function createCity(scene) {
 }
 
 // === OLD createLobbyInterior (kept for reference, no longer called) ===
-function registerStairFloors(x, z, width, depth, floorH) {
-  // Must match createStaircase dimensions exactly
+function registerStairFloors(x, z, width, depth, floorH, numFloors = 3) {
+  const floors = Math.min(numFloors, 6);
   const stairW = Math.min(5, width * 0.06);
   const stairX = x + width / 2 - stairW / 2 - 1;
   const stairD = Math.min(10, depth * 0.4);
   const stairStartZ = z - depth / 2 + 3;
 
-  for (let flight = 0; flight < 2; flight++) {
+  // Stair step floors for ALL flights
+  for (let flight = 0; flight < floors - 1; flight++) {
     const baseY = flight * floorH;
     const stepsPerFlight = 20;
     const stepH = floorH / stepsPerFlight;
     const stepD = stairD / stepsPerFlight;
-
     for (let s = 0; s < stepsPerFlight; s += 2) {
       addFloor(stairX, stairStartZ + s * stepD, stairW + 1, stepD * 2 + 0.3, baseY + (s + 2) * stepH);
     }
-
     addFloor(stairX, stairStartZ + stairD + 0.5, stairW + 2, 3, (flight + 1) * floorH);
   }
 
-  // Ground floor walkable surface (full interior minus 0.5m wall clearance)
-  addFloor(x, z, width - 1, depth - 1, 0);
-  // Floor slabs 1.OG + 2.OG (full interior so players reach rooms near outer walls)
-  for (let fl = 1; fl <= 2; fl++) {
+  // Ground floor + ALL upper floor walkable surfaces
+  for (let fl = 0; fl < floors; fl++) {
     addFloor(x, z, width - 1, depth - 1, fl * floorH);
   }
-
-  // Stairwell is fully open (no wall colliders — hallway walls provide containment)
 }
 
 // ---------------------------------------------------------------------------
@@ -2846,7 +2843,7 @@ function buildScene(scene) {
   // ===== DREAM WATER WORLD =====
   const dwwX = 70, dwwZ = -30;  // Water World = RIGHT side
   createHotelBuilding(scene, dwwX, dwwZ - 30, 115, 35, 6, 'DWW Main Water', '#f0ead8', 0);
-  registerStairFloors(dwwX, dwwZ - 30, 115, 35, 6.0);
+  registerStairFloors(dwwX, dwwZ - 30, 115, 35, 6.0, 6);
   createHotelBuilding(scene, dwwX + 45, dwwZ - 30, 50, 22, 4, 'DWW Annex Water', '#ede6d4', 0.5);
   registerStairFloors(dwwX + 45, dwwZ - 30, 50, 22, 6.0);
   // DWW small boutique wing (2 floors, cozy premium rooms)
