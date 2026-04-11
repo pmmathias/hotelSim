@@ -2399,9 +2399,9 @@ function createAmphitheater(scene, x, z, rotation = 0, size = 'small') {
   }));
   group.add(makeBox(stageW, backdropH, 0.4, backdropMat, 0, stageH + backdropH / 2, -stageD / 2 + 0.2));
 
-  // LED screen with animated Canvas texture (scrolling text + patterns)
-  const screenW = stageW - 3;
-  const screenH = backdropH - 1.5;
+  // LED screen — nearly fills entire backdrop wall
+  const screenW = stageW - 1;
+  const screenH = backdropH - 0.5;
   const screenCanvas = document.createElement('canvas');
   screenCanvas.width = 512; screenCanvas.height = 128;
   const screenTex = new THREE.CanvasTexture(screenCanvas);
@@ -2845,12 +2845,9 @@ function buildScene(scene) {
   createHotelBuilding(scene, dwwX, dwwZ - 30, 115, 35, 6, 'DWW Main Water', '#f0ead8', 0);
   registerStairFloors(dwwX, dwwZ - 30, 115, 35, 6.0, 6);
   createHotelBuilding(scene, dwwX + 45, dwwZ - 30, 50, 22, 4, 'DWW Annex Water', '#ede6d4', 0.5);
-  registerStairFloors(dwwX + 45, dwwZ - 30, 50, 22, 6.0);
-  // DWW small boutique wing (2 floors, cozy premium rooms)
-  // Position: inside DWW perimeter (x=35..175), clear of west hedge at x=35
-  // DWW Boutique: clearly separated to the right of DWW Main
+  registerStairFloors(dwwX + 45, dwwZ - 30, 50, 22, 6.0, 4);
   createHotelBuilding(scene, dwwX + 65, dwwZ - 20, 25, 16, 2, 'DWW Boutique Water', '#f5ede0', 0.8);
-  registerStairFloors(dwwX + 65, dwwZ - 20, 25, 16, 6.0);
+  registerStairFloors(dwwX + 65, dwwZ - 20, 25, 16, 6.0, 2);
 
   const signMat = getCachedMat('sign', () => new THREE.MeshStandardMaterial({
     color: 0x1155aa, emissive: 0x1155aa, emissiveIntensity: 0.5, roughness: 0.3 }));
@@ -2879,14 +2876,12 @@ function buildScene(scene) {
   // ===== DREAM FUN WORLD =====
   const dfwX = -70, dfwZ = -30; // Fun World = LEFT side
   createHotelBuilding(scene, dfwX, dfwZ - 30, 115, 35, 6, 'DFW Main Fun', '#eee8d6', 1.0);
-  registerStairFloors(dfwX, dfwZ - 30, 115, 35, 6.0);
+  registerStairFloors(dfwX, dfwZ - 30, 115, 35, 6.0, 6);
   scene.add(makeBox(28, 3, 0.3, signMat, dfwX, 22, dfwZ - 12));
   createHotelBuilding(scene, dfwX + 45, dfwZ - 25, 35, 15, 3, 'Qum Village', '#f2ebe0', 1.5);
-  registerStairFloors(dfwX + 45, dfwZ - 25, 35, 15, 6.0);
-  // DFW small boutique wing (2 floors, premium rooms)
-  // DFW Boutique: clearly separated to the left of DFW Main
+  registerStairFloors(dfwX + 45, dfwZ - 25, 35, 15, 6.0, 3);
   createHotelBuilding(scene, dfwX - 65, dfwZ - 20, 25, 16, 2, 'DFW Boutique Fun', '#f0e8d8', 2.0);
-  registerStairFloors(dfwX - 65, dfwZ - 20, 25, 16, 6.0);
+  registerStairFloors(dfwX - 65, dfwZ - 20, 25, 16, 6.0, 2);
 
   createPool(scene, dfwX + 10, dfwZ + 20, 55, 28);
   createPool(scene, dfwX - 30, dfwZ + 25, 12, 8);
