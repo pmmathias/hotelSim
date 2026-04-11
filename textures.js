@@ -132,6 +132,13 @@ export const TEXTURE_URLS = {
     source: 'Poly Haven - Plaster Stone Wall 01',
     license: 'CC0',
   },
+
+  // CEILING (smooth white plaster — distinct from damask walls)
+  ceiling: {
+    diffuse: 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/white_plaster_02/white_plaster_02_diff_1k.jpg',
+    source: 'Poly Haven - White Plaster 02 (smooth matte)',
+    license: 'CC0',
+  },
 };
 
 
@@ -1519,6 +1526,8 @@ export function generateAllTextures() {
     marbleWall: marble,
     parquet: woodOak,
     herringbone: lobbyFloor,
+    // Ceiling (distinct from walls — smooth white plaster)
+    ceilingPlaster:     concrete,   // procedural fallback until Poly Haven loads
     // City shop facades (start with the procedural wall texture)
     facadeBrickRed:     wall,
     facadeBrickTan:     wall,
@@ -1550,6 +1559,8 @@ export async function upgradeLuxuryTextures(textures, onUpgrade) {
     { key: 'facadePlasterStone', url: TEXTURE_URLS.facadePlasterStone.diffuse, repeat: [2, 2] },
     { key: 'facadeStone',        url: TEXTURE_URLS.facadeStone.diffuse,        repeat: [2, 2] },
     { key: 'facadePlaster',      url: TEXTURE_URLS.facadePlaster.diffuse,      repeat: [2, 2] },
+    // Ceiling
+    { key: 'ceilingPlaster',     url: TEXTURE_URLS.ceiling.diffuse,            repeat: [3, 3] },
   ];
 
   for (const { key, url, repeat } of luxuryTextures) {

@@ -523,7 +523,7 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
   }
 
   // Floor slabs (top = parquet, no texture needed since covered by floor-specific materials)
-  const slabMat = makePBR('slab', { color: 0x5a4030, roughness: 0.8 });
+  const slabMat = makePBR('slab', { map: textures.concrete, color: 0xd8d0c8, roughness: 0.8 });
   for (let f = 1; f < floors; f++) {
     const slab = makeBox(width - wallT * 2, 0.25, depth - wallT * 2, slabMat, 0, f * floorH, 0);
     slab.receiveShadow = true;
@@ -1070,7 +1070,7 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   // Decorative ceiling — visible damask with warm tint
   // (makeBox auto-scales UVs by surface area; for large rooms this gives proper tiling)
   const ceilDecorMat = getCachedMat('ceil_decor', () => new THREE.MeshStandardMaterial({
-    map: textures.damask, color: 0xe8c878, roughness: 0.7, metalness: 0.1,
+    map: textures.ceilingPlaster, color: 0xf5f0e8, roughness: 0.85,
   }));
   group.add(makeBox(W - 1, 0.08, D - 1, ceilDecorMat, 0, H - 0.5, 0));
 
@@ -1162,7 +1162,7 @@ function createGroundFloor(group, W, D, H, T, marbleMat, damaskMat, ceilMat, woo
   // Lift shaft walls + colliders
   const liftW = 3.5, liftD = 3.5;
   const liftTotalH = H * 3;
-  const liftMetalMat = getCachedMat('lift_metal', () => new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.6, roughness: 0.2 }));
+  const liftMetalMat = getCachedMat('lift_metal', () => new THREE.MeshStandardMaterial({ map: textures.concrete, color: 0x999999, metalness: 0.5, roughness: 0.25 }));
   const liftWallMat = getCachedMat('lift_wall', () => new THREE.MeshStandardMaterial({ map: textures.marbleWall, color: 0xeeeae0, roughness: 0.3, metalness: 0.15 }));
   group.add(makeBox(0.15, liftTotalH, liftD, liftWallMat, liftX - liftW / 2, liftTotalH / 2, liftZ));
   group.add(makeBox(liftW, liftTotalH, 0.15, liftWallMat, liftX, liftTotalH / 2, liftZ - liftD / 2));
@@ -1367,7 +1367,7 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
 
   // === CEILING (textured box, ornate tinted damask) ===
   const ceilDecorMat = getCachedMat('ceil_decor', () => new THREE.MeshStandardMaterial({
-    map: textures.damask, color: 0xe8c878, roughness: 0.7, metalness: 0.1,
+    map: textures.ceilingPlaster, color: 0xf5f0e8, roughness: 0.85,
   }));
   group.add(makeBox(W - 2, 0.08, D - 2, ceilDecorMat, 0, y + H - 0.5, 0));
 
@@ -3469,6 +3469,7 @@ function init() {
       facadePlasterStone: 'facade_2',
       facadeStone: 'facade_3',
       facadePlaster: 'facade_4',
+      ceilingPlaster: 'ceil_decor',
     }[key];
     if (matKey && matCache[matKey]) {
       matCache[matKey].map = newTex;
