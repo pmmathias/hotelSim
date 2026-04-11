@@ -230,7 +230,7 @@ function makeBox(w, h, d, mat, x, y, z) {
   // repeats at wall ends are invisible (no cut seams).
   const uvAttr = geo.attributes.uv;
   if (uvAttr) {
-    const metersPerRepeat = 2; // 1 texture repeat per 2 meters (more visible pattern)
+    const metersPerRepeat = 1; // 1 texture repeat per 1 meter (n meters = n repeats)
     const sW = w / metersPerRepeat;
     const sH = h / metersPerRepeat;
     const sD = d / metersPerRepeat;
@@ -714,7 +714,7 @@ function addAutoDoor(group, x, y, z, w, h, slideAxis, slideAmount, buildingX, bu
 
   // Door PANEL is a Group containing: outer frame, inner panel, glass insert, handle
   const door = new THREE.Group();
-  const thickness = 0.12;  // proper door thickness (was 0.08)
+  const thickness = 0.06;  // thinner than walls (0.15) to avoid z-fighting when closed
 
   // Helper: create a door slab with correct axis layout
   // wide = the door's width direction (along wall)
@@ -989,14 +989,8 @@ function createStaircase(group, W, D, H, marbleMat, damaskMat, ceilPanelMat) {
     color: 0xcccccc, metalness: 0.6, roughness: 0.2,
   }));
 
-  // Stairwell: south back wall only (west side open to lobby for easy access)
-  const swH = H * 3;
-  group.add(makeBox(stairW + 1, swH, 0.15, damaskMat, stairX, swH / 2, stairStartZ + stairD + 1));
-  // North wall: thin lintel above stairwell entrance (each floor)
-  for (let fl = 0; fl < 3; fl++) {
-    const fy = fl * H;
-    group.add(makeBox(stairW + 0.5, 0.3, 0.15, damaskMat, stairX, fy + 2.5 + 0.15, stairStartZ - 0.5));
-  }
+  // Stairwell: open on all sides (no back wall, no floating lintels)
+  // Hallway walls and floor slabs provide sufficient containment
 
   // Steps for all 3 flights (EG→1.OG, 1.OG→2.OG, 2.OG→roof-landing)
   for (let flight = 0; flight < 2; flight++) {
