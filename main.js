@@ -2428,12 +2428,16 @@ function createAmphitheater(scene, x, z, rotation = 0, size = 'small') {
   const screenCanvas = document.createElement('canvas');
   screenCanvas.width = 1024; screenCanvas.height = 256;
   const screenTex = new THREE.CanvasTexture(screenCanvas);
-  screenTex.wrapS = THREE.RepeatWrapping;
+  screenTex.wrapS = THREE.ClampToEdgeWrapping;
+  screenTex.wrapT = THREE.ClampToEdgeWrapping;
   const screenMat = new THREE.MeshStandardMaterial({
     map: screenTex, emissive: 0xffffff, emissiveIntensity: 4.0, emissiveMap: screenTex,
     roughness: 0.1, color: 0x000000,
   });
-  const screenMesh = makeBox(screenW, screenH, 0.1, screenMat, 0, stageH + backdropH / 2 + 0.3, -stageD / 2 + 0.45);
+  // Screen mesh: use PlaneGeometry (NOT makeBox) to avoid UV tiling
+  const screenGeo = new THREE.PlaneGeometry(screenW, screenH);
+  const screenMesh = new THREE.Mesh(screenGeo, screenMat);
+  screenMesh.position.set(0, stageH + backdropH / 2 + 0.3, -stageD / 2 + 0.45);
   group.add(screenMesh);
   // Register for animation
   if (!window.__screenCanvases) window.__screenCanvases = [];
