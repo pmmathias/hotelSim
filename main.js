@@ -2407,7 +2407,7 @@ function createAmphitheater(scene, x, z, rotation = 0, size = 'small') {
   const screenTex = new THREE.CanvasTexture(screenCanvas);
   screenTex.wrapS = THREE.RepeatWrapping;
   const screenMat = new THREE.MeshStandardMaterial({
-    map: screenTex, emissive: 0xffffff, emissiveIntensity: 1.0, emissiveMap: screenTex,
+    map: screenTex, emissive: 0xffffff, emissiveIntensity: 8.0, emissiveMap: screenTex,
     roughness: 0.1, color: 0x000000,
   });
   const screenMesh = makeBox(screenW, screenH, 0.1, screenMat, 0, stageH + backdropH / 2 + 0.3, -stageD / 2 + 0.45);
@@ -3666,8 +3666,8 @@ function animate() {
       const t = elapsedTime;
       const pattern = window.__screenPattern % 8;
 
-      // Dark blue/purple background (not pure black — needs to glow through emissiveMap)
-      ctx.fillStyle = warm ? '#1a0a08' : '#08081a';
+      // Tinted background (bright enough to glow through emissiveMap at emissiveIntensity 8)
+      ctx.fillStyle = warm ? '#301808' : '#081830';
       ctx.fillRect(0, 0, w, h);
 
       // DFW (large) = warm colors (orange/pink/gold), DWW (small) = cool colors (blue/cyan/teal)
@@ -3834,9 +3834,10 @@ function animate() {
     for (const strip of ledStrips) {
       if (strip.style === 'screen') {
         // Screen animation is handled by Canvas texture updates.
-        // Restore emissive (day mode sets it to 0) so canvas patterns glow.
+        // Restore emissive (day mode sets it to 0). Must be bright enough
+        // to compete with LED frame strips (emissiveIntensity ~63).
         strip.mat.emissive.setRGB(1, 1, 1);
-        strip.mat.emissiveIntensity = 1.0;
+        strip.mat.emissiveIntensity = 8.0;
         strip.mat.color.setRGB(0, 0, 0);
         continue;
       } else if (strip.style === 'disco') {
