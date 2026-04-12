@@ -2407,7 +2407,7 @@ function createAmphitheater(scene, x, z, rotation = 0, size = 'small') {
   const screenTex = new THREE.CanvasTexture(screenCanvas);
   screenTex.wrapS = THREE.RepeatWrapping;
   const screenMat = new THREE.MeshStandardMaterial({
-    map: screenTex, emissive: 0xffffff, emissiveIntensity: 2.0, emissiveMap: screenTex,
+    map: screenTex, emissive: 0xffffff, emissiveIntensity: 4.0, emissiveMap: screenTex,
     roughness: 0.1, color: 0x000000,
   });
   const screenMesh = makeBox(screenW, screenH, 0.1, screenMat, 0, stageH + backdropH / 2 + 0.3, -stageD / 2 + 0.45);
@@ -3546,7 +3546,7 @@ function init() {
   function setNightMode() {
     isNightMode = true;
     // Rotate screen pattern each time night is activated
-    window.__screenPattern = (window.__screenPattern || 0) + 1;
+    window.__screenPattern = ((window.__screenPattern || 3) + 1); // starts at 4 = hotel name
     sunLight.intensity = 2.0;           // SAME as day (keeps interiors identical)
     ambientLight.intensity = 0.5;       // SAME as day
     ambientLight.color.set(0x88aacc);  // SAME as day
@@ -3659,23 +3659,23 @@ function animate() {
       }
     } else {
     // Night: rotating patterns (changes each time night mode is activated)
-    if (!window.__screenPattern) window.__screenPattern = 0;
+    // Pattern 4 = hotel name text (always readable from distance)
     for (const sc of window.__screenCanvases) {
       const ctx = sc.canvas.getContext('2d');
       const w = sc.canvas.width, h = sc.canvas.height;
       const t = elapsedTime;
       const pattern = window.__screenPattern % 8;
 
-      // Dark background for pattern contrast (emissiveMap: bright patterns on dark = visible)
-      ctx.fillStyle = warm ? '#0a0404' : '#04040a';
-      ctx.fillRect(0, 0, w, h);
-
       // DFW (large) = warm colors (orange/pink/gold), DWW (small) = cool colors (blue/cyan/teal)
       const warm = sc.isLarge;
+
+      // Dark background for pattern contrast
+      ctx.fillStyle = warm ? '#0a0404' : '#04040a';
+      ctx.fillRect(0, 0, w, h);
       const cx = w / 2, cy = h / 2;
 
-      // Scale factor: patterns fill ~80% of screen canvas
-      const S = Math.min(w, h * 2) * 0.4; // base scale unit
+      // Scale factor: patterns should fill most of the screen
+      const S = w * 0.45; // ~90% of canvas width as base scale
 
       switch (pattern) {
         case 0: { // LARGE centered pulsing rings
@@ -3734,16 +3734,24 @@ function animate() {
           }
           break;
         }
-        case 4: { // LARGE hotel name (fills screen)
+        case 4: { // LARGE hotel name (auto-sized to fit screen with margin)
           const name = sc.isLarge ? 'DREAM FUN WORLD' : 'DREAM WATER WORLD';
-          ctx.font = `bold ${Math.floor(h * 0.65)}px sans-serif`;
+          // Auto-size font to fit canvas width with 10% margin
+          let fontSize = Math.floor(h * 0.7);
+          ctx.font = `bold ${fontSize}px sans-serif`;
+          while (ctx.measureText(name).width > w * 0.9 && fontSize > 20) {
+            fontSize -= 4;
+            ctx.font = `bold ${fontSize}px sans-serif`;
+          }
           ctx.textAlign = 'center';
-          const glow = 0.6 + Math.sin(t * 2) * 0.3;
+          ctx.textBaseline = 'middle';
+          const glow = 0.7 + Math.sin(t * 2) * 0.25;
           ctx.fillStyle = warm
-            ? `rgba(255,140,50,${glow})`
+            ? `rgba(255,160,50,${glow})`
             : `rgba(80,180,255,${glow})`;
-          ctx.fillText(name, cx, cy + h * 0.2);
+          ctx.fillText(name, cx, cy);
           ctx.textAlign = 'left';
+          ctx.textBaseline = 'alphabetic';
           break;
         }
         case 5: { // LARGE rotating dot circle
@@ -3837,7 +3845,7 @@ function animate() {
         // Restore emissive (day mode sets it to 0). Must be bright enough
         // to compete with LED frame strips (emissiveIntensity ~63).
         strip.mat.emissive.setRGB(1, 1, 1);
-        strip.mat.emissiveIntensity = 2.0;
+        strip.mat.emissiveIntensity = 4.0;
         strip.mat.color.setRGB(0, 0, 0);
         continue;
       } else if (strip.style === 'disco') {
