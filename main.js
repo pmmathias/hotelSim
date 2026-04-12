@@ -447,10 +447,34 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
   // East + West walls (full)
   walls.push(makeBox(wallT, totalH, depth, wallMat, width / 2, totalH / 2, 0));
   walls.push(makeBox(wallT, totalH, depth, wallMat, -width / 2, totalH / 2, 0));
-  // North wall: two segments + entrance gap
-  walls.push(makeBox(segW, totalH, wallT, wallMat, -(entranceW / 2 + segW / 2), totalH / 2, -depth / 2));
-  walls.push(makeBox(segW, totalH, wallT, wallMat, (entranceW / 2 + segW / 2), totalH / 2, -depth / 2));
-  walls.push(makeBox(entranceW, totalH - floorH, wallT, wallMat, 0, floorH + (totalH - floorH) / 2, -depth / 2));
+  // North wall: EG solid (two segments + entrance gap), OG with balcony door openings
+  walls.push(makeBox(segW, floorH, wallT, wallMat, -(entranceW / 2 + segW / 2), floorH / 2, -depth / 2));
+  walls.push(makeBox(segW, floorH, wallT, wallMat, (entranceW / 2 + segW / 2), floorH / 2, -depth / 2));
+  // North OG: same door openings as south (reuse same room positions)
+  {
+    const ogH = totalH - floorH;
+    const sideW2 = Math.min(8, width * 0.12);
+    const roomsW = width - sideW2 * 2;
+    const roomCount = Math.max(1, Math.floor(roomsW / 8));
+    const roomW = roomsW / roomCount;
+    const doorGap = 2.2;
+    for (const segSign of [-1, 1]) {
+      const segStart = segSign < 0 ? -width / 2 : entranceW / 2;
+      const segEnd = segSign < 0 ? -entranceW / 2 : width / 2;
+      let cursor = segStart;
+      for (let r = 0; r < roomCount; r++) {
+        const rx = -width / 2 + sideW2 + r * roomW + roomW / 2;
+        if (rx - doorGap / 2 < segStart || rx + doorGap / 2 > segEnd) continue;
+        const pieceW = (rx - doorGap / 2) - cursor;
+        if (pieceW > 0.2) walls.push(makeBox(pieceW, ogH, wallT, wallMat, cursor + pieceW / 2, floorH + ogH / 2, -depth / 2));
+        walls.push(makeBox(doorGap, ogH - 2.4, wallT, wallMat, rx, floorH + 2.4 + (ogH - 2.4) / 2, -depth / 2));
+        cursor = rx + doorGap / 2;
+      }
+      const lastW = segEnd - cursor;
+      if (lastW > 0.2) walls.push(makeBox(lastW, ogH, wallT, wallMat, cursor + lastW / 2, floorH + ogH / 2, -depth / 2));
+    }
+    walls.push(makeBox(entranceW, ogH, wallT, wallMat, 0, floorH + ogH / 2, -depth / 2));
+  }
   // South wall: EG solid (two segments + entrance gap), OG with balcony door openings
   // EG portion (ground floor height only)
   walls.push(makeBox(segW, floorH, wallT, wallMat, -(entranceW / 2 + segW / 2), floorH / 2, depth / 2));
@@ -1454,15 +1478,14 @@ function createUpperFloor(group, W, D, H, floorNum, damaskMat, ceilMat, woodMat,
       group.add(makeBox(0.15, 0.3, 0.15, lampMat, bedX - 0.6, y + 0.8, bedZ + 1.7));
       group.add(makeBox(0.15, 0.3, 0.15, lampMat, bedX - 0.6, y + 0.8, bedZ - 1.7));
 
-      // === BALCONY GLASS DOOR (south rooms only, at outer wall → leads to balcony) ===
-      if (isSouth) {
-        const balcDoorZ = D / 2 - 0.15; // at the building exterior wall
+      // === BALCONY GLASS DOOR (both sides — exterior wall → leads to balcony) ===
+      {
+        const balcDoorZ = faceSign * (D / 2 - 0.15);
         addAutoDoor(group, rx, y, balcDoorZ, 2.0, 2.2, 'x', 2.3,
           _currentBuildingX, _currentBuildingZ, {
             thinAxis: 'z',
-            material: glassMat2, // transparent glass door
+            material: glassMat2,
           });
-        // Fixed glass panel above door
         group.add(makeBox(2.0, 0.8, 0.08, glassMat2, rx, y + 2.6, balcDoorZ));
       }
 
