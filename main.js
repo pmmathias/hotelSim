@@ -2407,7 +2407,7 @@ function createAmphitheater(scene, x, z, rotation = 0, size = 'small') {
   const screenTex = new THREE.CanvasTexture(screenCanvas);
   screenTex.wrapS = THREE.RepeatWrapping;
   const screenMat = new THREE.MeshStandardMaterial({
-    map: screenTex, emissive: 0xffffff, emissiveIntensity: 8.0, emissiveMap: screenTex,
+    map: screenTex, emissive: 0xffffff, emissiveIntensity: 2.0, emissiveMap: screenTex,
     roughness: 0.1, color: 0x000000,
   });
   const screenMesh = makeBox(screenW, screenH, 0.1, screenMat, 0, stageH + backdropH / 2 + 0.3, -stageD / 2 + 0.45);
@@ -3666,8 +3666,8 @@ function animate() {
       const t = elapsedTime;
       const pattern = window.__screenPattern % 8;
 
-      // Tinted background (bright enough to glow through emissiveMap at emissiveIntensity 8)
-      ctx.fillStyle = warm ? '#301808' : '#081830';
+      // Dark background for pattern contrast (emissiveMap: bright patterns on dark = visible)
+      ctx.fillStyle = warm ? '#0a0404' : '#04040a';
       ctx.fillRect(0, 0, w, h);
 
       // DFW (large) = warm colors (orange/pink/gold), DWW (small) = cool colors (blue/cyan/teal)
@@ -3837,14 +3837,14 @@ function animate() {
         // Restore emissive (day mode sets it to 0). Must be bright enough
         // to compete with LED frame strips (emissiveIntensity ~63).
         strip.mat.emissive.setRGB(1, 1, 1);
-        strip.mat.emissiveIntensity = 8.0;
+        strip.mat.emissiveIntensity = 2.0;
         strip.mat.color.setRGB(0, 0, 0);
         continue;
       } else if (strip.style === 'disco') {
         // Disco lights: rapid strobe-like color flashing
         const hue = (elapsedTime * 0.5 + strip.phase) % 1.0;
         _tmpColor.setHSL(hue, 1.0, 0.6);
-        const strobe = Math.sin(elapsedTime * 8 + strip.phase * 7) > 0 ? 105.0 : 16.0;
+        const strobe = Math.sin(elapsedTime * 8 + strip.phase * 7) > 0 ? 5.0 : 1.0;
         strip.mat.emissive.copy(_tmpColor);
         strip.mat.emissiveIntensity = strobe;
         strip.mat.color.copy(_tmpColor);
@@ -3859,7 +3859,7 @@ function animate() {
         // Multi-color: each strip gets its OWN hue based on phase
         const hue = (elapsedTime * 0.08 + strip.phase * 0.7) % 1.0;
         _tmpColor.setHSL(hue, 1.0, 0.45);
-        const intensity = 63.0 + Math.sin(elapsedTime * 2.5 + strip.phase * 6) * 26.0;
+        const intensity = 4.0 + Math.sin(elapsedTime * 2.5 + strip.phase * 6) * 2.0;
         strip.mat.emissive.copy(_tmpColor);
         strip.mat.emissiveIntensity = intensity;
         strip.mat.color.copy(_tmpColor);
