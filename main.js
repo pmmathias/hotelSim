@@ -2407,7 +2407,8 @@ function createAmphitheater(scene, x, z, rotation = 0, size = 'small') {
   const screenTex = new THREE.CanvasTexture(screenCanvas);
   screenTex.wrapS = THREE.RepeatWrapping;
   const screenMat = new THREE.MeshStandardMaterial({
-    map: screenTex, emissive: 0xffffff, emissiveIntensity: 0.8, emissiveMap: screenTex, roughness: 0.3,
+    map: screenTex, emissive: 0xffffff, emissiveIntensity: 1.0, emissiveMap: screenTex,
+    roughness: 0.1, color: 0x000000,
   });
   const screenMesh = makeBox(screenW, screenH, 0.1, screenMat, 0, stageH + backdropH / 2 + 0.3, -stageD / 2 + 0.45);
   group.add(screenMesh);
@@ -3507,6 +3508,8 @@ function init() {
   window.__colGrid = _colGrid;
   window.__scene = scene;
   window.__floors = floors;
+  window.__setNightMode = setNightMode;
+  window.__setDayMode = setDayMode;
   window.composer = composer;
   window.THREE = THREE;
   minimap = new Minimap('minimap');
@@ -3830,12 +3833,12 @@ function animate() {
   if (frameCount % 2 === 0 && isNightMode) {
     for (const strip of ledStrips) {
       if (strip.style === 'screen') {
-        // Stage LED screens: the Canvas texture IS the animation.
-        // Just gently pulse the emissive intensity so patterns glow without being washed out.
-        const pulse = 0.8 + Math.sin(elapsedTime * 2 + strip.phase * 3) * 0.2;
-        strip.mat.emissive.setRGB(1, 1, 1); // white emissive = show canvas colors as-is
-        strip.mat.emissiveIntensity = pulse;
-        strip.mat.color.setRGB(0.1, 0.1, 0.1); // dark base so emissiveMap dominates
+        // Screen animation is handled by Canvas texture updates.
+        // Restore emissive (day mode sets it to 0) so canvas patterns glow.
+        strip.mat.emissive.setRGB(1, 1, 1);
+        strip.mat.emissiveIntensity = 1.0;
+        strip.mat.color.setRGB(0, 0, 0);
+        continue;
       } else if (strip.style === 'disco') {
         // Disco lights: rapid strobe-like color flashing
         const hue = (elapsedTime * 0.5 + strip.phase) % 1.0;
