@@ -180,6 +180,7 @@ const ledStrips = [];
 const autoDoors = [];     // { mesh, worldPos, openOffset, isOpen, t }
 const lifts = [];         // { buildingX, buildingZ, localX, localZ, w, d, currentFloor, state, timer, targetFloor, doorL, doorR }
 const floorGroups = [];   // { group, buildingX, buildingZ, floorNum, yMin, yMax }
+const extFloorGroups = []; // PERF-6: exterior deco per floor for culling
 const stageLights = [];
 let skyUniforms = null;
 let skyMesh = null;
@@ -581,7 +582,11 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
   const dfwLedMeshesA = [];
   const dfwLedMeshesB = [];
 
+  // PERF-6: per-floor groups for exterior deco culling
   for (let f = 0; f < floors; f++) {
+    const extGroup = new THREE.Group();
+    hiGroup.add(extGroup);
+    extFloorGroups.push({ group: extGroup, floorNum: f, buildingX: x, buildingZ: z });
     for (let c = 0; c < cols; c++) {
       const bx = startX + c * (balconyW + balcGap);
       const by = (f + 0.5) * floorH;
@@ -600,25 +605,25 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
         const fz_railDeep = faceSign * (depth / 2 + balcD);
 
         // === BALCONY structure (platform, railing, partitions) — BOTH sides ===
-        hiGroup.add(makeBox(balconyW, 0.15, balcD, balconyMat, bx, walkY + 0.08, fz_balDeep));
-        hiGroup.add(makeBox(balconyW, 1.0, 0.05, glassMat, bx, walkY + 0.6, fz_railDeep));
+        extGroup.add(makeBox(balconyW, 0.15, balcD, balconyMat, bx, walkY + 0.08, fz_balDeep));
+        extGroup.add(makeBox(balconyW, 1.0, 0.05, glassMat, bx, walkY + 0.6, fz_railDeep));
         // Side partitions
         const partMat = getCachedMat('balc_part', () => new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.5, metalness: 0.1 }));
-        hiGroup.add(makeBox(0.08, 1.2, balcD, partMat, bx - balconyW / 2, walkY + 0.7, fz_balDeep));
-        hiGroup.add(makeBox(0.08, 1.2, balcD, partMat, bx + balconyW / 2, walkY + 0.7, fz_balDeep));
+        extGroup.add(makeBox(0.08, 1.2, balcD, partMat, bx - balconyW / 2, walkY + 0.7, fz_balDeep));
+        extGroup.add(makeBox(0.08, 1.2, balcD, partMat, bx + balconyW / 2, walkY + 0.7, fz_balDeep));
         addCollider(x + bx - balconyW / 2, z + faceSign * (depth / 2 + balcD / 2), 0.15, balcD, walkY + 1.4, walkY - 0.5);
         addCollider(x + bx + balconyW / 2, z + faceSign * (depth / 2 + balcD / 2), 0.15, balcD, walkY + 1.4, walkY - 0.5);
 
         // Balcony furniture (upper floors, south side only — north balconies are decorative)
         if (f > 0 && faceSign > 0) {
-          hiGroup.add(makeBox(0.5, 0.04, 0.5, getCachedMat('balc_table', () => new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.4, metalness: 0.3 })), bx - 0.6, walkY + 0.65, fz_balDeep));
-          hiGroup.add(makeBox(0.04, 0.55, 0.04, getCachedMat('balc_leg', () => new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.4 })), bx - 0.6, walkY + 0.35, fz_balDeep));
-          hiGroup.add(makeBox(0.4, 0.04, 0.4, getCachedMat('balc_chair', () => new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.5 })), bx + 0.6, walkY + 0.42, fz_balDeep));
+          extGroup.add(makeBox(0.5, 0.04, 0.5, getCachedMat('balc_table', () => new THREE.MeshStandardMaterial({ color: 0xaaaaaa, roughness: 0.4, metalness: 0.3 })), bx - 0.6, walkY + 0.65, fz_balDeep));
+          extGroup.add(makeBox(0.04, 0.55, 0.04, getCachedMat('balc_leg', () => new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.4 })), bx - 0.6, walkY + 0.35, fz_balDeep));
+          extGroup.add(makeBox(0.4, 0.04, 0.4, getCachedMat('balc_chair', () => new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.5 })), bx + 0.6, walkY + 0.42, fz_balDeep));
           const bpotMat = getCachedMat('pot', () => new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.7 }));
           const bplantMat = getCachedMat('plant', () => new THREE.MeshStandardMaterial({ color: 0x2a7a2a, roughness: 0.8 }));
-          hiGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.25, 5), bpotMat));
+          extGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.25, 5), bpotMat));
           hiGroup.children[hiGroup.children.length - 1].position.set(bx - balconyW / 2 + 0.3, walkY + 0.22, fz_balDeep);
-          hiGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 5, 5), bplantMat));
+          extGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 5, 5), bplantMat));
           hiGroup.children[hiGroup.children.length - 1].position.set(bx - balconyW / 2 + 0.3, walkY + 0.5, fz_balDeep);
         }
 
@@ -629,7 +634,7 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
         }
 
         // Window glass
-        hiGroup.add(makeBox(balconyW - 0.6, floorH * 0.6, 0.08, glassMat, bx, by, fz_win));
+        extGroup.add(makeBox(balconyW - 0.6, floorH * 0.6, 0.08, glassMat, bx, by, fz_win));
 
         // DFW LED frames + orange panels
         if (isFunWorld) {
@@ -642,10 +647,10 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
           const mb = makeBox(balconyW + 0.2, ledT, ledT, ledMat, bx, by - floorH * 0.35, fz);
           const ml = makeBox(ledT, floorH * 0.7 + 0.2, ledT, ledMat, bx - balconyW / 2 - 0.1, by, fz);
           const mr = makeBox(ledT, floorH * 0.7 + 0.2, ledT, ledMat, bx + balconyW / 2 + 0.1, by, fz);
-          hiGroup.add(mt); hiGroup.add(mb); hiGroup.add(ml); hiGroup.add(mr);
+          extGroup.add(mt); extGroup.add(mb); extGroup.add(ml); extGroup.add(mr);
           ledArr.push(mt, mb, ml, mr);
           if (((f * 17 + c * 31) % 10) < 3) {
-            hiGroup.add(makeBox(balconyW - 0.2, floorH * 0.65, 0.04, dfwOrangeMat,
+            extGroup.add(makeBox(balconyW - 0.2, floorH * 0.65, 0.04, dfwOrangeMat,
               bx, by, faceSign * (depth / 2 + 0.28)));
           }
         }
@@ -3512,8 +3517,9 @@ function init() {
   // Post-processing: Bloom + Output (lightweight pipeline)
   composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  composer.addPass(new UnrealBloomPass(
-    new THREE.Vector2(window.innerWidth / 4, window.innerHeight / 4), 0.3, 0.4, 0.88));
+  const bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth / 4, window.innerHeight / 4), 0.3, 0.4, 0.88);
+  composer.addPass(bloomPass);
   composer.addPass(new OutputPass());
 
   loadBar.style.width = '90%';
@@ -3662,9 +3668,17 @@ function animate() {
     }
   }
 
-  // Water addon pools: always update time. Visibility handled naturally by Three.js.
-  for (const w of waterMeshes2) {
-    w.material.uniforms['time'].value += 0.4 / 60.0;
+  // PERF-2: Water pools — hide when player deep inside building (saves 2× scene render per pool)
+  {
+    const px = camera.position.x, pz = camera.position.z;
+    let deepIn = false;
+    for (const fg of floorGroups) {
+      if (Math.abs(px - fg.buildingX) < 50 && Math.abs(pz - fg.buildingZ) < 10) { deepIn = true; break; }
+    }
+    for (const w of waterMeshes2) {
+      w.visible = !deepIn;
+      w.material.uniforms['time'].value += 0.4 / 60.0;
+    }
   }
   // Custom shader pools (no reflection): update time
   for (const pm of poolWaterMeshes) {
@@ -3864,6 +3878,19 @@ function animate() {
     }
   }
 
+  // PERF-6: Exterior deco culling (balkons, LEDs, windows) — show only nearby floors
+  if (frameCount % 2 === 0) {
+    const py = camera.position.y;
+    const playerFloor = Math.max(0, Math.round((py - PLAYER_HEIGHT) / 6));
+    for (const efg of extFloorGroups) {
+      const dx = Math.abs(camera.position.x - efg.buildingX);
+      const dz = Math.abs(camera.position.z - efg.buildingZ);
+      if (dx > 100 || dz > 50) { efg.group.visible = false; continue; }
+      // Show current floor ± 2 (exterior deco visible from outside)
+      efg.group.visible = Math.abs(efg.floorNum - playerFloor) <= 2;
+    }
+  }
+
   // LED strips: animated at night – BRIGHT!
   if (frameCount % 2 === 0 && isNightMode) {
     for (const strip of ledStrips) {
@@ -3937,6 +3964,15 @@ function animate() {
     window.__moonMesh.position.z = camera.position.z - 150;
   }
 
+  // PERF-1: Skip bloom when inside building (saves full-screen pass)
+  {
+    const px = camera.position.x, pz = camera.position.z;
+    let inside = false;
+    for (const fg of floorGroups) {
+      if (Math.abs(px - fg.buildingX) < 60 && Math.abs(pz - fg.buildingZ) < 20) { inside = true; break; }
+    }
+    bloomPass.enabled = !inside;
+  }
   composer.render(dt);
   const drawCalls = renderer.info.render.calls;
   const triangles = renderer.info.render.triangles;
