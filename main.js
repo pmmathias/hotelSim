@@ -3447,7 +3447,7 @@ class Minimap {
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
-let renderer, scene, controller, quadtree, minimap, composer;
+let renderer, scene, controller, quadtree, minimap, composer, bloomPass;
 let debugEl, loadBar;
 let showDebug = false;
 const clock = new THREE.Clock();
@@ -3517,7 +3517,7 @@ function init() {
   // Post-processing: Bloom + Output (lightweight pipeline)
   composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloomPass = new UnrealBloomPass(
+  bloomPass = new UnrealBloomPass(
     new THREE.Vector2(window.innerWidth / 4, window.innerHeight / 4), 0.3, 0.4, 0.88);
   composer.addPass(bloomPass);
   composer.addPass(new OutputPass());
