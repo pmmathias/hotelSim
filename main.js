@@ -622,9 +622,9 @@ function createHotelBuilding(scene, x, z, width, depth, floors, name, color, led
           const bpotMat = getCachedMat('pot', () => new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.7 }));
           const bplantMat = getCachedMat('plant', () => new THREE.MeshStandardMaterial({ color: 0x2a7a2a, roughness: 0.8 }));
           extGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.25, 5), bpotMat));
-          hiGroup.children[hiGroup.children.length - 1].position.set(bx - balconyW / 2 + 0.3, walkY + 0.22, fz_balDeep);
+          extGroup.children[extGroup.children.length - 1].position.set(bx - balconyW / 2 + 0.3, walkY + 0.22, fz_balDeep);
           extGroup.add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 5, 5), bplantMat));
-          hiGroup.children[hiGroup.children.length - 1].position.set(bx - balconyW / 2 + 0.3, walkY + 0.5, fz_balDeep);
+          extGroup.children[extGroup.children.length - 1].position.set(bx - balconyW / 2 + 0.3, walkY + 0.5, fz_balDeep);
         }
 
         // Walkable floor + railing collider (south side only — north is decorative)
