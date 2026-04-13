@@ -3878,16 +3878,23 @@ function animate() {
     }
   }
 
-  // PERF-6: Exterior deco culling (balkons, LEDs, windows) — show only nearby floors
+  // PERF-6: Exterior deco culling — only cull when INSIDE the building
+  // Outside: ALL floors visible (balconies, LEDs, windows must show from street!)
   if (frameCount % 2 === 0) {
     const py = camera.position.y;
+    const px = camera.position.x, pz = camera.position.z;
     const playerFloor = Math.max(0, Math.round((py - PLAYER_HEIGHT) / 6));
     for (const efg of extFloorGroups) {
-      const dx = Math.abs(camera.position.x - efg.buildingX);
-      const dz = Math.abs(camera.position.z - efg.buildingZ);
-      if (dx > 100 || dz > 50) { efg.group.visible = false; continue; }
-      // Show current floor ± 2 (exterior deco visible from outside)
-      efg.group.visible = Math.abs(efg.floorNum - playerFloor) <= 2;
+      const dx = Math.abs(px - efg.buildingX);
+      const dz = Math.abs(pz - efg.buildingZ);
+      const insideBuilding = dx < 60 && dz < 20;
+      if (insideBuilding) {
+        // Inside: only show current floor ± 1 (rest hidden by walls/ceilings)
+        efg.group.visible = Math.abs(efg.floorNum - playerFloor) <= 1;
+      } else {
+        // Outside: show ALL floors (full facade with balconies + LEDs)
+        efg.group.visible = true;
+      }
     }
   }
 
